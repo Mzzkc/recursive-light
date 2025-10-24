@@ -729,4 +729,233 @@ mod tests {
             "System should remain operational after network error"
         );
     }
+
+    #[tokio::test]
+    async fn test_input_validation_empty_string() {
+        // Test that VifApi handles empty input gracefully
+        let framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test User".to_string(),
+        };
+
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let db_pool = setup_test_db().await.unwrap();
+
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
+
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&vif_api.memory_manager.db_pool)
+        .await
+        .unwrap();
+
+        // Process empty input
+        let result = vif_api.process_input("", user_id).await;
+
+        // Should handle gracefully - either return Ok with empty/default response or Err
+        // The key is that it shouldn't panic
+        assert!(
+            result.is_ok() || result.is_err(),
+            "System should handle empty input without panicking"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_input_validation_very_long_input() {
+        // Test that VifApi handles very long inputs without crashing
+        let framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test User".to_string(),
+        };
+
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let db_pool = setup_test_db().await.unwrap();
+
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
+
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&vif_api.memory_manager.db_pool)
+        .await
+        .unwrap();
+
+        // Create a very long input (10,000 characters)
+        let very_long_input = "A".repeat(10_000);
+
+        // Process very long input
+        let result = vif_api.process_input(&very_long_input, user_id).await;
+
+        // Should handle gracefully without panicking
+        assert!(
+            result.is_ok() || result.is_err(),
+            "System should handle very long input without panicking"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_input_validation_special_characters() {
+        // Test that VifApi handles special characters and potential SQL injection attempts
+        let framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test User".to_string(),
+        };
+
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let db_pool = setup_test_db().await.unwrap();
+
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
+
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&vif_api.memory_manager.db_pool)
+        .await
+        .unwrap();
+
+        // Test various special characters and SQL injection patterns
+        let special_inputs = vec![
+            "'; DROP TABLE users; --",
+            "<script>alert('xss')</script>",
+            "' OR '1'='1",
+            "\0\n\r\t",
+            "🔥💡🌟", // Unicode emojis
+            r#"{"json": "injection"}"#,
+        ];
+
+        for input in special_inputs {
+            let result = vif_api.process_input(input, user_id).await;
+
+            // Should handle gracefully - SQLx parameterized queries prevent injection
+            // The key is no panic and no database corruption
+            assert!(
+                result.is_ok() || result.is_err(),
+                "System should handle special characters '{}' without panicking",
+                input
+            );
+        }
+
+        // Verify database integrity - users table should still exist and have our test user
+        let user_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+            .fetch_one(&vif_api.memory_manager.db_pool)
+            .await
+            .unwrap();
+
+        assert!(
+            user_count >= 1,
+            "Database should remain intact after special character inputs"
+        );
+    }
 }

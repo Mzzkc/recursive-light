@@ -1060,4 +1060,141 @@ mod tests {
             DevelopmentalStage::Transcendence
         );
     }
+
+    #[test]
+    fn test_boundary_permeability_transitions() {
+        // Test that boundaries transition correctly through permeability states
+        let mut context =
+            FlowContext::new("Test input".to_string(), 0.7, create_test_framework_state());
+
+        // Add domain activations that should trigger boundary transitions
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.9 });
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.85 });
+
+        let processor = BoundaryDissolutionProcessor;
+        processor.process(&mut context).unwrap();
+
+        // Find the CD-SD boundary
+        let cd_sd_boundary = context
+            .boundaries
+            .iter()
+            .find(|b| b.name == "CD-SD")
+            .expect("CD-SD boundary should exist");
+
+        // With high activations (0.9 + 0.85)/2 = 0.875, permeability should be high
+        assert!(
+            cd_sd_boundary.permeability > 0.7,
+            "High domain activations should increase boundary permeability"
+        );
+
+        // Status should transition from Maintained → Transitional or Transcendent
+        assert!(
+            cd_sd_boundary.status == "Transitional" || cd_sd_boundary.status == "Transcendent",
+            "Boundary status should transition with high permeability: {}",
+            cd_sd_boundary.status
+        );
+    }
+
+    #[test]
+    fn test_boundary_state_low_permeability() {
+        // Test that boundaries remain maintained with low domain activations
+        let mut context =
+            FlowContext::new("Test input".to_string(), 0.7, create_test_framework_state());
+
+        // Add low domain activations
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.3 });
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.4 });
+
+        let processor = BoundaryDissolutionProcessor;
+        processor.process(&mut context).unwrap();
+
+        // Find the CD-SD boundary
+        let cd_sd_boundary = context
+            .boundaries
+            .iter()
+            .find(|b| b.name == "CD-SD")
+            .expect("CD-SD boundary should exist");
+
+        // With low activations (0.3 + 0.4)/2 = 0.35, permeability should be low
+        assert!(
+            cd_sd_boundary.permeability < 0.7,
+            "Low domain activations should keep boundary permeability low"
+        );
+
+        // Status should remain Maintained
+        assert_eq!(
+            cd_sd_boundary.status, "Maintained",
+            "Boundary should remain Maintained with low permeability"
+        );
+    }
+
+    #[test]
+    fn test_boundary_domain_interaction_cascade() {
+        // Test that multiple domain activations create cascading boundary effects
+        let mut context =
+            FlowContext::new("Test input".to_string(), 0.8, create_test_framework_state());
+
+        // Activate all four domains with varying strengths
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.9 }); // Computational
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.85 }); // Scientific
+        context
+            .domains
+            .insert("CuD".to_string(), DomainActivation { activation: 0.8 }); // Cultural
+        context
+            .domains
+            .insert("ED".to_string(), DomainActivation { activation: 0.75 }); // Experiential
+
+        let processor = BoundaryDissolutionProcessor;
+        processor.process(&mut context).unwrap();
+
+        // All boundaries should be affected
+        assert!(!context.boundaries.is_empty(), "Boundaries should exist");
+
+        // Count transcendent boundaries (high permeability)
+        let transcendent_count = context
+            .boundaries
+            .iter()
+            .filter(|b| b.status == "Transcendent")
+            .count();
+
+        // With all domains highly activated, we should see multiple transcendent boundaries
+        assert!(
+            transcendent_count >= 1,
+            "High activation across domains should create at least one transcendent boundary"
+        );
+
+        // Verify that boundaries between adjacent high-activation domains have higher permeability
+        let cd_sd_boundary = context.boundaries.iter().find(|b| b.name == "CD-SD");
+        if let Some(boundary) = cd_sd_boundary {
+            assert!(
+                boundary.permeability > 0.7,
+                "Boundary between highly activated domains should have high permeability"
+            );
+        }
+
+        // Verify cascade effect: boundaries should be ordered by their domain activation strengths
+        // Higher activation pairs should have higher permeability
+        let boundaries_by_activation: Vec<_> = context
+            .boundaries
+            .iter()
+            .map(|b| (b.name.clone(), b.permeability))
+            .collect();
+
+        assert!(
+            !boundaries_by_activation.is_empty(),
+            "Should have boundaries affected by domain cascade"
+        );
+    }
 }

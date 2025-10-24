@@ -716,4 +716,184 @@ mod tests {
             }
         }
     }
+
+    #[tokio::test]
+    async fn test_database_foreign_key_constraint_enforcement() {
+        // Test that foreign key constraints are enforced (snapshots require valid user)
+        let db_pool = setup_test_db()
+            .await
+            .expect("Failed to setup test database");
+
+        let invalid_user_id = Uuid::new_v4();
+
+        // Attempt to save a snapshot for a non-existent user
+        let result = sqlx::query(
+            "INSERT INTO state_snapshots (id, user_id, domain_states, boundary_states, pattern_ids, identity_anchors, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().as_bytes().to_vec())
+        .bind(invalid_user_id.as_bytes().to_vec())
+        .bind("{}")
+        .bind("[]")
+        .bind("[]")
+        .bind("[]")
+        .bind("{}")
+        .execute(&db_pool)
+        .await;
+
+        // Foreign key constraint should prevent this insert
+        assert!(
+            result.is_err(),
+            "Should reject snapshot for non-existent user (foreign key constraint)"
+        );
+
+        // Verify the error is related to foreign key constraint
+        if let Err(e) = result {
+            let error_msg = e.to_string();
+            // SQLite foreign key violations contain "FOREIGN KEY constraint failed"
+            assert!(
+                error_msg.contains("FOREIGN KEY") || error_msg.contains("foreign key"),
+                "Error should indicate foreign key violation: {}",
+                error_msg
+            );
+        }
+
+        // Now verify that with a valid user, insert succeeds
+        let valid_user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(valid_user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(valid_user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .expect("Should create test user");
+
+        // Now snapshot insert should succeed
+        let result = sqlx::query(
+            "INSERT INTO state_snapshots (id, user_id, domain_states, boundary_states, pattern_ids, identity_anchors, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(Uuid::new_v4().as_bytes().to_vec())
+        .bind(valid_user_id.as_bytes().to_vec())
+        .bind("{}")
+        .bind("[]")
+        .bind("[]")
+        .bind("[]")
+        .bind("{}")
+        .execute(&db_pool)
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "Should accept snapshot for valid user: {:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_database_concurrent_snapshot_access() {
+        // Test that concurrent reads and writes to snapshots don't cause data corruption
+        use tokio::task::JoinSet;
+
+        let db_pool = setup_test_db()
+            .await
+            .expect("Failed to setup test database");
+
+        // Create a test user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .expect("Should create test user");
+
+        let manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+
+        // Spawn multiple concurrent tasks that read and write snapshots
+        let mut tasks = JoinSet::new();
+
+        for i in 0..10 {
+            let manager_clone = MemoryManager {
+                db_pool: db_pool.clone(),
+            };
+            let user_id_clone = user_id;
+
+            tasks.spawn(async move {
+                // Write a snapshot using the public API
+                use crate::prompt_engine::{BoundaryState, DomainState};
+
+                let domains = vec![DomainState {
+                    name: "CD".to_string(),
+                    state: format!("0.{}", i),
+                }];
+
+                let boundaries = vec![BoundaryState {
+                    name: "CD-SD".to_string(), // Use proper boundary format (domain-domain)
+                    permeability: 0.5 + (i as f64 * 0.01),
+                    status: "Active".to_string(),
+                }];
+
+                let patterns = vec![format!("pattern_{}", i)];
+
+                manager_clone
+                    .create_snapshot(
+                        domains,
+                        boundaries,
+                        patterns,
+                        user_id_clone,
+                        &format!("test input {}", i),
+                    )
+                    .await
+                    .expect("Should save snapshot");
+
+                // Immediately read it back
+                let retrieved = manager_clone
+                    .get_latest_snapshot(user_id_clone)
+                    .await
+                    .expect("Should retrieve snapshot");
+
+                assert!(retrieved.is_some(), "Should have retrieved a snapshot");
+
+                i // Return the iteration number
+            });
+        }
+
+        // Wait for all tasks to complete
+        let mut completed = 0;
+        while let Some(result) = tasks.join_next().await {
+            match result {
+                Ok(_) => completed += 1,
+                Err(e) => {
+                    panic!("Concurrent task failed: {:?}", e);
+                }
+            }
+        }
+
+        assert_eq!(completed, 10, "All 10 concurrent tasks should complete");
+
+        // Verify final state - should have at least one snapshot
+        let final_snapshot = manager.get_latest_snapshot(user_id).await;
+        assert!(
+            final_snapshot.is_ok(),
+            "Should be able to retrieve final snapshot"
+        );
+        assert!(
+            final_snapshot.unwrap().is_some(),
+            "Should have at least one snapshot after concurrent operations"
+        );
+    }
 }
