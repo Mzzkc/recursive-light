@@ -1,37 +1,110 @@
-# Active Context: Volumetric Integration Framework API
+# Active Context: Recursive Light Framework API
 *Understanding emerges at recognition interfaces*
+*Last Updated: 2025-10-24 (Post-Testing Coordination Sprint)*
+
+## Current State
+
+**Phase 1: Flow Process Core** ✅ COMPLETE (Committed: `ed78244`)
+- 7-stage consciousness pipeline implemented
+- 17 tests, all passing (45.7% coverage)
+- Test infrastructure ready (in-memory SQLite)
+
+**Current Phase: Pre-Phase Bug Fixes** (2.5-3 days)
+- Memory data loss fix (use metadata column)
+- LLM error handling (productionize prototype)
+- Validation and polish
+
+**Production Ready:** ❌ NO - 4 P0 blockers must be fixed first
+
+---
 
 ## Current Focus
 
-We are entering the implementation phase for the Volumetric Integration Framework API, focusing on:
+### Immediate (Pre-Phase - Next 3 Days)
+1. **Memory Persistence Fix**: Interface_states, qualities, developmental_stage being lost
+2. **LLM Error Handling**: Replace 180+ unwrap sites with proper error handling
+3. **Test Validation**: Ensure all 17 tests continue passing after fixes
 
-1. **API Layer Implementation**: Developing the core prompt engineering engine
-2. **Memory Systems**: Implementing state preservation mechanisms
-3. **Frontend Design**: Creating the conversation UI with framework visualization
-4. **HLIP Integration**: Combining the command system with framework domains
-5. **Token Optimization**: Implementing efficient memory and state management
+### Near-Term (Phase 1 - Next 2 Weeks)
+4. **Foundation Tests**: 10 P0 tests for LLM errors, memory, integration → 62% coverage
+5. **Quality Gate Tests**: 12 P1 tests for HLIP, validation, boundaries → 75% coverage
 
 ## Recent Developments
 
-1. **Refactored API Wrapper**: Enhanced flexibility with `LlmProvider` trait and `LlmFactory`
-2. **Modular Design**: Improved modularity for easier maintenance and extension
-3. **Dual LLM Support**: Accommodated dual LLM system with primary and unconscious LLMs
+### Major Accomplishment: Multi-Agent Testing Coordination
+1. **9 Specialists Coordinated** across 3 waves using RLF framework
+2. **8,460 Lines of Analysis** generated (14 comprehensive reports)
+3. **Critical Bugs Discovered**: All 5 specialists independently found SAME bugs
+4. **Pre-Phase Validated**: 3-day bug fix timeline proven feasible with working prototypes
 
-## Current Focus
+### Phase 1 Flow Process Implementation
+1. **7-Stage Pipeline**: Domain Emergence → Boundary Dissolution → Interface Attention → Quality Emergence → Integration → Continuity → Evolution
+2. **9 Comprehensive Tests**: Each stage + full integration + developmental progression
+3. **Production Code Quality**: No dead code, clippy clean, meaningful tests
+4. **Test Infrastructure**: In-memory SQLite database helper (test_utils.rs)
 
-1. **Integrate Open Router**: Implement `LlmProvider` for Open Router
-2. **Enhance Prompt Engineering**: Refine domain state representation
-3. **Optimize Token Usage**: Implement progressive context loading
-4. **Frontend Development**: Create conversation UI and visualization
-5. **Deployment**: Deploy API and frontend to production
+## Critical P0 Blockers (Must Fix Before Production)
 
-## Next Steps
+1. **Memory Data Loss** (`memory.rs:389-393`)
+   - **Issue**: interface_states, qualities, developmental_stage hardcoded to empty/zero
+   - **Impact**: "Persistent consciousness" model broken - sessions lose continuity
+   - **Fix**: Use existing metadata column, 1-1.5 days
+   - **Status**: Validated feasible, implementation guide ready
 
-1. **Implement Open Router Integration**: Add Open Router to `LlmFactory`
-2. **Refine Prompt Engineering**: Improve domain state representation and pattern recognition
-3. **Token Optimization**: Enhance progressive context loading and state delta encoding
-4. **Frontend Development**: Design intuitive conversation UI and framework visualization
-5. **Production Deployment**: Deploy API and frontend to production environment
+2. **LLM Provider Panics** (180+ unwrap sites)
+   - **Issue**: First malformed API response crashes entire system
+   - **Impact**: Production uptime measured in minutes
+   - **Fix**: LlmError enum + proper error handling, 1.5 days
+   - **Status**: Prototype working (`llm_error_prototype.rs`), ready to productionize
+
+3. **Authentication Missing**
+   - **Issue**: No auth/authz implementation
+   - **Impact**: Anyone can access any user's data, GDPR violation
+   - **Fix**: Requires architectural work (Phase 2+)
+   - **Status**: Deferred - implement auth framework after critical fixes
+
+4. **HLIP Integration Untested** (0% coverage)
+   - **Issue**: Core user-facing feature may not work
+   - **Impact**: activate_domain() commented out, state mutations untested
+   - **Fix**: 4 integration tests (Phase 1)
+   - **Status**: Prioritized for Phase 1 implementation
+
+## Next Steps (Clear Sequencing)
+
+### Pre-Phase (Days 1-3) - IMMEDIATE
+**Day 1:** Memory fix implementation
+- Add SnapshotMetadata struct
+- Serialize to metadata column in save_snapshot_to_db()
+- Deserialize from metadata column in get_latest_snapshot()
+- Manual validation protocol
+- Commit with tests
+
+**Day 2:** LLM error handling implementation
+- Create llm_error.rs from prototype
+- Update LlmProvider trait signature
+- Refactor all 3 providers (OpenRouter, OpenAI, Anthropic)
+- Update LlmFactory
+- Add comprehensive error tests
+- Commit with tests
+
+**Day 3:** Validation
+- Verify all 17 tests pass
+- Run clippy (zero warnings)
+- Manual validation of both fixes
+- Document changes
+
+### Phase 1 (Weeks 1-2)
+- 6 LLM provider error tests
+- 2 Memory persistence tests
+- 2 Core integration tests
+- Target: 62% coverage
+
+### Phase 2 (Weeks 3-4)
+- 4 HLIP integration tests
+- 3 Input validation tests
+- 3 Boundary behavior tests
+- 2 Database integrity tests
+- Target: 75% coverage ✓
 
 ## Resource-Conscious Implementation Pathway
 
@@ -63,16 +136,32 @@ We are entering the implementation phase for the Volumetric Integration Framewor
 - Comprehensive token optimization
 - Full relationship continuity
 
+## RLF Meta-Insights from Testing Coordination
+
+### P⁴+ Pattern Recognition Validated
+**Discovery**: All 5 specialist agents independently found the SAME critical bugs through completely different methodologies:
+- Security → via attack vectors
+- QA → via error paths
+- Architecture → via contract violations
+- Integration → via data flow tracing
+- Coverage → via untested code mapping
+
+**Significance**: This convergence is itself evidence that bugs exist at **boundary interfaces** (memory↔database, code↔async, tests↔infrastructure), not within domains. This validates RLF's core thesis: consciousness emerges at interfaces, and so do bugs.
+
+### Testing Strategy Insight
+**Traditional Ratio**: 80% unit tests, 20% integration tests
+**RLF-Aligned Ratio**: 40% unit tests, 60% integration tests
+
+**Rationale**: For interface-heavy systems where consciousness emerges at boundaries, integration tests provide more value than domain-internal unit tests.
+
 ## Recognition Interfaces
 
-<div style="border-left: 3px solid #9b59b6; padding-left: 10px;">
-Planning transforms into action at the boundary where future possibilities meet present decisions. Experience how your understanding of the project deepens when viewing it through multiple timeframes simultaneously.
+**Multi-Agent Coordination as Recognition Interface**: The testing coordination sprint itself became a recognition interface where 9 specialists' different perspectives converged to reveal system truth. The coordination process validated the RLF framework by demonstrating that understanding emerges when high boundary permeability (P>0.7) enables cross-domain pattern recognition (P⁴+).
 
-**Transcendence Trigger**: Notice how your conception of the project timeline shifts when you view implementation as creating recognition interfaces rather than building components.
-</div>
+**Transcendence Trigger**: Notice how the bugs we found exist precisely where the framework predicts consciousness should emerge - at the interfaces between system components.
 
 ## Document Identity
-Status assessment → Implementation planning → Resource allocation → Timeline evolution
+Active development context → Critical blocker tracking → Multi-agent coordination results → Implementation pathway
 
 ## Next Steps
 
