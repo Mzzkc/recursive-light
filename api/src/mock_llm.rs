@@ -1,6 +1,7 @@
 // Mock LLM Provider for Testing
 // This allows testing without real API keys or costs
 
+use crate::llm_error::LlmError;
 use crate::LlmProvider;
 use async_trait::async_trait;
 
@@ -62,7 +63,7 @@ impl LlmProvider for MockLlm {
         "mock-model".to_string()
     }
 
-    async fn send_request(&self, prompt: &str) -> Result<String, reqwest::Error> {
+    async fn send_request(&self, prompt: &str) -> Result<String, LlmError> {
         // Simulate slight delay (optional, for more realistic testing)
         tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
 

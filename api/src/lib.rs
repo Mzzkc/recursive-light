@@ -2,6 +2,7 @@ mod autonomous_judgement;
 pub mod domains;
 mod flow_process;
 mod hlip_integration;
+pub mod llm_error;
 mod memory;
 pub mod mock_llm;
 pub mod prompt_engine;
@@ -14,6 +15,7 @@ use autonomous_judgement::{AutonomousJudgementModule, Factors, Intention, Protot
 use domains::{ComputationalDomain, CulturalDomain, ExperientialDomain, ScientificDomain};
 use flow_process::{FlowContext, FlowProcess};
 use hlip_integration::HLIPIntegration;
+use llm_error::LlmError;
 use memory::{CompactStateSnapshot, MemoryManager};
 use prompt_engine::{FrameworkState, PromptEngine};
 use reqwest::Client;
@@ -39,7 +41,7 @@ pub trait LlmProvider {
     fn get_api_key(&self) -> String;
     fn get_provider_name(&self) -> String;
     fn get_model_name(&self) -> String;
-    async fn send_request(&self, prompt: &str) -> Result<String, reqwest::Error>;
+    async fn send_request(&self, prompt: &str) -> Result<String, LlmError>;
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -52,21 +54,23 @@ pub struct LlmConfig {
 pub struct LlmFactory;
 
 impl LlmFactory {
-    pub fn create_llm(config: &LlmConfig) -> Box<dyn LlmProvider> {
+    pub fn create_llm(config: &LlmConfig) -> Result<Box<dyn LlmProvider>, LlmError> {
         match config.provider_name.as_str() {
-            "openai" => Box::new(OpenAiLlm::new(
+            "openai" => Ok(Box::new(OpenAiLlm::new(
                 config.api_key.clone(),
                 config.model_name.clone(),
-            )),
-            "anthropic" => Box::new(AnthropicLlm::new(
+            ))),
+            "anthropic" => Ok(Box::new(AnthropicLlm::new(
                 config.api_key.clone(),
                 config.model_name.clone(),
-            )),
-            "openrouter" => Box::new(OpenRouterLlm::new(
+            ))),
+            "openrouter" => Ok(Box::new(OpenRouterLlm::new(
                 config.api_key.clone(),
                 config.model_name.clone(),
-            )),
-            _ => panic!("Unsupported LLM provider"),
+            ))),
+            _ => Err(LlmError::UnsupportedProvider {
+                provider_name: config.provider_name.clone(),
+            }),
         }
     }
 }
@@ -101,7 +105,7 @@ impl LlmProvider for OpenRouterLlm {
         self.model_name.clone()
     }
 
-    async fn send_request(&self, prompt: &str) -> Result<String, reqwest::Error> {
+    async fn send_request(&self, prompt: &str) -> Result<String, LlmError> {
         let response = self
             .client
             .post("https://openrouter.ai/api/v1/chat/completions")
@@ -112,13 +116,19 @@ impl LlmProvider for OpenRouterLlm {
                 "messages": [{"role": "user", "content": prompt}],
             }))
             .send()
-            .await?;
+            .await?; // Automatically converts reqwest::Error to LlmError
 
         let response_json: serde_json::Value = response.json().await?;
-        Ok(response_json["choices"][0]["message"]["content"]
+
+        // FIXED: Proper error handling instead of unwrap()
+        response_json["choices"][0]["message"]["content"]
             .as_str()
-            .unwrap()
-            .to_string())
+            .ok_or_else(|| LlmError::InvalidResponseFormat {
+                field: "choices[0].message.content".to_string(),
+                message: "Expected string content in response".to_string(),
+                raw_response: Some(response_json.to_string()),
+            })
+            .map(|s| s.to_string())
     }
 }
 
@@ -152,7 +162,7 @@ impl LlmProvider for OpenAiLlm {
         self.model_name.clone()
     }
 
-    async fn send_request(&self, prompt: &str) -> Result<String, reqwest::Error> {
+    async fn send_request(&self, prompt: &str) -> Result<String, LlmError> {
         let response = self
             .client
             .post("https://api.openai.com/v1/completions")
@@ -165,16 +175,17 @@ impl LlmProvider for OpenAiLlm {
             .send()
             .await?;
 
-        match response.json::<serde_json::Value>().await {
-            Ok(response_json) => {
-                if let Some(text) = response_json["choices"][0]["text"].as_str() {
-                    Ok(text.to_string())
-                } else {
-                    Ok("Invalid response format".to_string())
-                }
-            }
-            Err(e) => Err(e),
-        }
+        let response_json: serde_json::Value = response.json().await?;
+
+        // FIXED: Proper error handling instead of fallback to "Invalid response format"
+        response_json["choices"][0]["text"]
+            .as_str()
+            .ok_or_else(|| LlmError::InvalidResponseFormat {
+                field: "choices[0].text".to_string(),
+                message: "Expected text field in response".to_string(),
+                raw_response: Some(response_json.to_string()),
+            })
+            .map(|s| s.to_string())
     }
 }
 
@@ -208,7 +219,7 @@ impl LlmProvider for AnthropicLlm {
         self.model_name.clone()
     }
 
-    async fn send_request(&self, prompt: &str) -> Result<String, reqwest::Error> {
+    async fn send_request(&self, prompt: &str) -> Result<String, LlmError> {
         let response = self
             .client
             .post("https://api.anthropic.com/v1/complete")
@@ -223,7 +234,16 @@ impl LlmProvider for AnthropicLlm {
             .await?;
 
         let response_json: serde_json::Value = response.json().await?;
-        Ok(response_json["completion"].as_str().unwrap().to_string())
+
+        // FIXED: Proper error handling instead of unwrap()
+        response_json["completion"]
+            .as_str()
+            .ok_or_else(|| LlmError::InvalidResponseFormat {
+                field: "completion".to_string(),
+                message: "Expected completion field in response".to_string(),
+                raw_response: Some(response_json.to_string()),
+            })
+            .map(|s| s.to_string())
     }
 }
 
@@ -476,5 +496,50 @@ mod tests {
 
         let latest_snapshot = vif_api.get_latest_snapshot(user_id).await;
         assert!(latest_snapshot.is_some());
+    }
+
+    #[test]
+    fn test_llm_factory_unsupported_provider() {
+        let config = LlmConfig {
+            api_key: "test-key".to_string(),
+            provider_name: "unsupported-provider".to_string(),
+            model_name: "test-model".to_string(),
+        };
+
+        let result = LlmFactory::create_llm(&config);
+        assert!(result.is_err());
+
+        match result {
+            Err(LlmError::UnsupportedProvider { provider_name }) => {
+                assert_eq!(provider_name, "unsupported-provider");
+            }
+            _ => panic!("Expected UnsupportedProvider error"),
+        }
+    }
+
+    #[test]
+    fn test_llm_factory_supported_providers() {
+        // Test that factory creates all three supported providers without panic
+        let providers = vec!["openai", "anthropic", "openrouter"];
+
+        for provider in providers {
+            let config = LlmConfig {
+                api_key: "test-key".to_string(),
+                provider_name: provider.to_string(),
+                model_name: "test-model".to_string(),
+            };
+
+            let result = LlmFactory::create_llm(&config);
+            assert!(
+                result.is_ok(),
+                "Factory should create {} provider",
+                provider
+            );
+
+            let llm = result.unwrap();
+            assert_eq!(llm.get_provider_name(), provider);
+            assert_eq!(llm.get_api_key(), "test-key");
+            assert_eq!(llm.get_model_name(), "test-model");
+        }
     }
 }

@@ -35,7 +35,7 @@ async fn main() {
         provider_name: "openai".to_string(),
         model_name: "text-davinci-003".to_string(),
     };
-    let provider = LlmFactory::create_llm(&llm_config);
+    let provider = LlmFactory::create_llm(&llm_config).expect("Failed to create LLM provider");
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let mut vif_api = VifApi::new(provider, framework_state, &database_url)
         .await
