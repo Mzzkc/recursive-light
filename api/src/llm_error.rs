@@ -221,4 +221,30 @@ mod tests {
         assert!(display.contains("Authentication error"));
         assert!(display.contains("Invalid API key"));
     }
+
+    #[test]
+    fn test_network_timeout_error() {
+        // Test network timeout scenario
+        let err = LlmError::NetworkError {
+            message: "Connection timeout after 30s".to_string(),
+            status_code: None,
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Network error"));
+        assert!(display.contains("timeout"));
+        assert!(display.contains("status: None"));
+    }
+
+    #[test]
+    fn test_rate_limit_error_with_retry() {
+        // Test rate limiting with retry_after information
+        let err = LlmError::RateLimitError {
+            message: "Too many requests".to_string(),
+            retry_after: Some(60),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Rate limit error"));
+        assert!(display.contains("Too many requests"));
+        assert!(display.contains("60"));
+    }
 }

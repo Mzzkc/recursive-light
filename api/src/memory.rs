@@ -608,4 +608,112 @@ mod tests {
         assert_eq!(retrieved.identity_anchor_ids.len(), 2);
         assert_eq!(retrieved.pattern_ids.len(), 1);
     }
+
+    #[tokio::test]
+    async fn test_metadata_corruption_handling() {
+        // Test that corrupted/malformed metadata doesn't crash the system
+
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+
+        // Create a test user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Manually insert a snapshot with corrupted JSON metadata
+        let snapshot_id = Uuid::new_v4();
+        let corrupted_metadata = "{invalid json, missing quotes: true, broken}";
+
+        sqlx::query(
+            "INSERT INTO state_snapshots (id, user_id, domain_states, boundary_states, pattern_ids, metadata, timestamp)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(snapshot_id.as_bytes().to_vec())
+        .bind(user_id.as_bytes().to_vec())
+        .bind("{}")
+        .bind("{}")
+        .bind("[]")
+        .bind(corrupted_metadata)
+        .bind(chrono::Utc::now().to_rfc3339())
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Attempt to retrieve - should handle corruption gracefully
+        let result = memory_manager.get_latest_snapshot(user_id).await;
+
+        match result {
+            Ok(snapshot_opt) => {
+                // If it succeeds, it should have defaults for corrupted fields
+                if let Some(snapshot) = snapshot_opt {
+                    // Corrupted metadata should result in empty/default values
+                    assert_eq!(
+                        snapshot.interface_states.len(),
+                        0,
+                        "Corrupted metadata should default to empty interface_states"
+                    );
+                    assert_eq!(
+                        snapshot.qualities,
+                        [0, 0, 0, 0, 0, 0, 0],
+                        "Corrupted metadata should default to zero qualities"
+                    );
+                    assert_eq!(
+                        snapshot.developmental_stage, 0,
+                        "Corrupted metadata should default to stage 0"
+                    );
+                }
+            }
+            Err(e) => {
+                // Alternatively, it's acceptable to return an error
+                // as long as the system doesn't panic/crash
+                println!("Gracefully handled corrupted metadata with error: {:?}", e);
+            }
+        }
+
+        // Test with completely missing metadata (NULL)
+        let snapshot_id2 = Uuid::new_v4();
+        let later_timestamp = chrono::Utc::now() + chrono::Duration::seconds(1);
+        sqlx::query(
+            "INSERT INTO state_snapshots (id, user_id, domain_states, boundary_states, pattern_ids, metadata, timestamp)
+             VALUES (?, ?, ?, ?, ?, NULL, ?)",
+        )
+        .bind(snapshot_id2.as_bytes().to_vec())
+        .bind(user_id.as_bytes().to_vec())
+        .bind("{}")
+        .bind("{}")
+        .bind("[]")
+        .bind(later_timestamp.to_rfc3339())
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Should handle NULL metadata gracefully
+        let result2 = memory_manager.get_latest_snapshot(user_id).await;
+        match result2 {
+            Ok(Some(snapshot)) => {
+                // NULL metadata should result in defaults
+                assert_eq!(snapshot.interface_states.len(), 0);
+                assert_eq!(snapshot.qualities, [0, 0, 0, 0, 0, 0, 0]);
+                assert_eq!(snapshot.developmental_stage, 0);
+            }
+            Ok(None) => panic!("Should find snapshot even with NULL metadata"),
+            Err(e) => {
+                // Error handling is acceptable as long as no panic
+                println!("Gracefully handled NULL metadata with error: {:?}", e);
+            }
+        }
+    }
 }

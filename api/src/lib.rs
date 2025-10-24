@@ -542,4 +542,191 @@ mod tests {
             assert_eq!(llm.get_model_name(), "test-model");
         }
     }
+
+    #[tokio::test]
+    async fn test_integration_llm_auth_error_propagation() {
+        // Test that LLM authentication errors propagate through the entire VifApi stack
+        let framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![prompt_engine::BoundaryState {
+                name: "CD-SD".to_string(),
+                permeability: 0.8,
+                status: "Active".to_string(),
+            }],
+            identity: "Test User".to_string(),
+        };
+
+        // Use MockErrorLlm that simulates authentication failure
+        let provider = Box::new(mock_llm::MockErrorLlm::auth_error());
+
+        // Setup VifApi with error-producing provider
+        let db_pool = setup_test_db().await.unwrap();
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
+
+        // Create test user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Process input - should propagate the auth error through the entire stack
+        let result = vif_api
+            .process_input("Test authentication error", user_id)
+            .await;
+
+        // Verify error propagated correctly
+        assert!(result.is_err(), "Should propagate LLM authentication error");
+
+        let error = result.unwrap_err();
+        let error_msg = error.to_string();
+
+        // The error should contain information about authentication failure
+        assert!(
+            error_msg.contains("Authentication") || error_msg.contains("Invalid API key"),
+            "Error should indicate authentication problem: {}",
+            error_msg
+        );
+    }
+
+    #[tokio::test]
+    async fn test_integration_llm_network_error_propagation() {
+        // Test that LLM network errors propagate through VifApi without panicking
+        let framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test User".to_string(),
+        };
+
+        // Use MockErrorLlm that simulates network timeout
+        let provider = Box::new(mock_llm::MockErrorLlm::network_error());
+
+        let db_pool = setup_test_db().await.unwrap();
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
+
+        // Create test user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Process input - should gracefully handle network error
+        let result = vif_api.process_input("Test network timeout", user_id).await;
+
+        // Verify error propagated correctly (no panic)
+        assert!(result.is_err(), "Should propagate LLM network error");
+
+        let error = result.unwrap_err();
+        let error_msg = error.to_string();
+
+        // The error should contain network-related information
+        assert!(
+            error_msg.contains("Network")
+                || error_msg.contains("Connection")
+                || error_msg.contains("timeout"),
+            "Error should indicate network problem: {}",
+            error_msg
+        );
+
+        // Critical: Verify that the system didn't panic and is still operational
+        // Try another operation to ensure the system remains stable
+        let result2 = vif_api.get_latest_snapshot(user_id).await;
+        assert!(
+            result2.is_none(),
+            "System should remain operational after network error"
+        );
+    }
 }

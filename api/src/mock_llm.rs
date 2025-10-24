@@ -49,6 +49,61 @@ impl MockLlm {
     }
 }
 
+/// Mock LLM that returns errors for testing error propagation
+pub struct MockErrorLlm {
+    error: LlmError,
+}
+
+impl MockErrorLlm {
+    /// Create a mock that always returns the specified error
+    pub fn new(error: LlmError) -> Self {
+        Self { error }
+    }
+
+    /// Create a mock that simulates authentication errors
+    pub fn auth_error() -> Self {
+        Self::new(LlmError::AuthError {
+            message: "Invalid API key".to_string(),
+        })
+    }
+
+    /// Create a mock that simulates network errors
+    pub fn network_error() -> Self {
+        Self::new(LlmError::NetworkError {
+            message: "Connection timeout".to_string(),
+            status_code: None,
+        })
+    }
+
+    /// Create a mock that simulates rate limiting
+    pub fn rate_limit_error() -> Self {
+        Self::new(LlmError::RateLimitError {
+            message: "Rate limit exceeded".to_string(),
+            retry_after: Some(60),
+        })
+    }
+}
+
+#[async_trait]
+impl LlmProvider for MockErrorLlm {
+    fn get_api_key(&self) -> String {
+        "mock-error-api-key".to_string()
+    }
+
+    fn get_provider_name(&self) -> String {
+        "mock-error".to_string()
+    }
+
+    fn get_model_name(&self) -> String {
+        "mock-error-model".to_string()
+    }
+
+    async fn send_request(&self, _prompt: &str) -> Result<String, LlmError> {
+        // Always return the configured error
+        Err(self.error.clone())
+    }
+}
+
 #[async_trait]
 impl LlmProvider for MockLlm {
     fn get_api_key(&self) -> String {
