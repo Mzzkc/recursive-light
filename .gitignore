@@ -1,0 +1,33 @@
+# Root .gitignore for Recursive Light Framework
+
+# Environment files (copy .env.example to .env)
+.env
+
+# Database files (local development)
+*.db
+*.db-shm
+*.db-wal
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Logs
+*.log
+
+# Build artifacts (api/ has its own .gitignore)
+/target/
+
+# Temporary files
+*.tmp
+*.bak

@@ -1,0 +1,52 @@
+# Pre-commit hooks for Recursive Light Framework
+# Ensures code quality and test compliance before commits
+# Installation: pip install pre-commit && pre-commit install
+
+repos:
+  # Rust formatting
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: Cargo Format
+        entry: cargo fmt
+        language: system
+        types: [rust]
+        pass_filenames: false
+        args: [--manifest-path=api/Cargo.toml, --all, --check]
+
+      - id: cargo-clippy
+        name: Cargo Clippy
+        entry: cargo clippy
+        language: system
+        types: [rust]
+        pass_filenames: false
+        args: [--manifest-path=api/Cargo.toml, --all-targets, --all-features, --, -D, warnings]
+
+      - id: cargo-test
+        name: Cargo Test (All Tests Must Pass)
+        entry: bash -c 'cd api && DATABASE_URL=sqlite:dev.db cargo test --all-features'
+        language: system
+        types: [rust]
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: cargo-doc
+        name: Cargo Doc (Documentation Check)
+        entry: cargo doc
+        language: system
+        types: [rust]
+        pass_filenames: false
+        args: [--manifest-path=api/Cargo.toml, --no-deps, --document-private-items]
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-json
+      - id: check-merge-conflict
+      - id: detect-private-key
