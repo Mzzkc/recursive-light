@@ -12,14 +12,14 @@ pub struct StateSnapshot {
 
 use std::collections::HashMap;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactInterfaceState {
     domains: (String, String),
     permeability: u8,
     flow_state: CompactInterfaceFlowState,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompactInterfaceFlowState {
     invitation: String,
     attention: String,
@@ -82,6 +82,14 @@ struct IdentityAnchor {
     confidence: f64,
     domains: Vec<String>,
     creation_time: i64,
+}
+
+/// Metadata stored in the metadata column to preserve flow process state
+#[derive(Debug, Serialize, Deserialize)]
+struct SnapshotMetadata {
+    interface_states: Vec<CompactInterfaceState>,
+    qualities: [u8; 7],
+    developmental_stage: u8,
 }
 
 impl CompactInterfaceState {
@@ -323,9 +331,18 @@ impl MemoryManager {
         let identity_anchors_json = serde_json::to_string(&compact_snapshot.identity_anchor_ids)
             .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
 
+        // Serialize metadata (interface_states, qualities, developmental_stage)
+        let metadata = SnapshotMetadata {
+            interface_states: compact_snapshot.interface_states.clone(),
+            qualities: compact_snapshot.qualities,
+            developmental_stage: compact_snapshot.developmental_stage,
+        };
+        let metadata_json =
+            serde_json::to_string(&metadata).map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+
         sqlx::query(
-            "INSERT INTO state_snapshots (id, user_id, timestamp, domain_states, boundary_states, pattern_ids, identity_anchors)
-             VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO state_snapshots (id, user_id, timestamp, domain_states, boundary_states, pattern_ids, identity_anchors, metadata)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
         )
             .bind(id.as_bytes().to_vec())
             .bind(user_id.as_bytes().to_vec())
@@ -334,6 +351,7 @@ impl MemoryManager {
             .bind(boundary_states_json)
             .bind(pattern_ids_json)
             .bind(identity_anchors_json)
+            .bind(metadata_json)
             .execute(&self.db_pool)
             .await?;
         Ok(())
@@ -344,7 +362,7 @@ impl MemoryManager {
         user_id: Uuid,
     ) -> Result<Option<CompactStateSnapshot>, sqlx::Error> {
         let row = sqlx::query(
-            "SELECT id, user_id, timestamp, domain_states, boundary_states, pattern_ids, identity_anchors
+            "SELECT id, user_id, timestamp, domain_states, boundary_states, pattern_ids, identity_anchors, metadata
              FROM state_snapshots
              WHERE user_id = ?
              ORDER BY timestamp DESC
@@ -363,6 +381,7 @@ impl MemoryManager {
             let boundary_states_json: String = row.get("boundary_states");
             let pattern_ids_json: String = row.get("pattern_ids");
             let identity_anchors_json: String = row.get("identity_anchors");
+            let metadata_json: Option<String> = row.get("metadata");
 
             let id_uuid = Uuid::from_slice(&id).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
             let user_id_uuid =
@@ -380,17 +399,30 @@ impl MemoryManager {
             let identity_anchor_ids: Vec<String> = serde_json::from_str(&identity_anchors_json)
                 .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
 
+            // Deserialize metadata (interface_states, qualities, developmental_stage)
+            // Default to empty/zero if metadata column is null (backward compatibility)
+            let metadata = if let Some(json) = metadata_json {
+                serde_json::from_str::<SnapshotMetadata>(&json)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
+            } else {
+                SnapshotMetadata {
+                    interface_states: vec![],
+                    qualities: [0; 7],
+                    developmental_stage: 0,
+                }
+            };
+
             Ok(Some(CompactStateSnapshot {
                 id: id_uuid.to_string(),
                 timestamp,
                 user_id: user_id_uuid.to_string(),
                 domain_values,
                 boundary_states,
-                interface_states: vec![], // Not stored in this table
-                qualities: [0; 7],        // Not stored in this table
+                interface_states: metadata.interface_states,
+                qualities: metadata.qualities,
                 identity_anchor_ids,
                 pattern_ids,
-                developmental_stage: 0, // Not stored in this table
+                developmental_stage: metadata.developmental_stage,
             }))
         } else {
             Ok(None)
@@ -402,11 +434,13 @@ impl MemoryManager {
 mod tests {
     use super::*;
     use crate::prompt_engine::{BoundaryState, DomainState};
+    use crate::test_utils::setup_test_db;
 
     #[tokio::test]
     async fn test_memory_manager() {
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let memory_manager = MemoryManager::new(&database_url).await.unwrap();
+        // Use in-memory database for testing
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager { db_pool };
 
         // Create a test user first (required by foreign key constraint)
         let user_id = Uuid::new_v4();
@@ -463,5 +497,115 @@ mod tests {
 
         assert_eq!(latest_snapshot.domain_values.len(), 2);
         assert_eq!(latest_snapshot.pattern_ids.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_metadata_persistence_roundtrip() {
+        // Use in-memory database for testing
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager { db_pool };
+
+        // Create a test user first
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&memory_manager.db_pool)
+        .await
+        .unwrap();
+
+        // Create a snapshot with rich metadata (interface_states, qualities, developmental_stage)
+        let interface_states = vec![
+            CompactInterfaceState {
+                domains: ("COMP".to_string(), "SCI".to_string()),
+                permeability: 8,
+                flow_state: CompactInterfaceFlowState {
+                    invitation: "Explore computational rigor".to_string(),
+                    attention: "Focus on empirical validation".to_string(),
+                    resonance: 7,
+                    emergence: vec!["Pattern A".to_string(), "Pattern B".to_string()],
+                },
+            },
+            CompactInterfaceState {
+                domains: ("SCI".to_string(), "CULT".to_string()),
+                permeability: 6,
+                flow_state: CompactInterfaceFlowState {
+                    invitation: "Bridge data to narrative".to_string(),
+                    attention: "Context awareness".to_string(),
+                    resonance: 5,
+                    emergence: vec!["Pattern C".to_string()],
+                },
+            },
+        ];
+
+        let qualities = [8, 7, 6, 9, 7, 8, 8]; // clarity, depth, openness, precision, fluidity, resonance, coherence
+        let developmental_stage = 3; // Integration stage
+
+        let snapshot = CompactStateSnapshot {
+            id: Uuid::new_v4().to_string(),
+            timestamp: chrono::Utc::now().timestamp(),
+            user_id: user_id.to_string(),
+            domain_values: std::collections::HashMap::from([(1, vec![8, 7]), (2, vec![7, 8])]),
+            boundary_states: 0b1010101010,
+            interface_states: interface_states.clone(),
+            qualities,
+            identity_anchor_ids: vec!["anchor1".to_string(), "anchor2".to_string()],
+            pattern_ids: vec!["pattern1".to_string()],
+            developmental_stage,
+        };
+
+        // Save snapshot
+        memory_manager.save_snapshot_to_db(&snapshot).await.unwrap();
+
+        // Retrieve snapshot
+        let retrieved = memory_manager
+            .get_latest_snapshot(user_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        // Verify ALL metadata persisted correctly (this is the critical fix)
+        assert_eq!(
+            retrieved.interface_states.len(),
+            2,
+            "interface_states should persist"
+        );
+        assert_eq!(
+            retrieved.interface_states[0].domains,
+            ("COMP".to_string(), "SCI".to_string())
+        );
+        assert_eq!(retrieved.interface_states[0].permeability, 8);
+        assert_eq!(
+            retrieved.interface_states[0].flow_state.invitation,
+            "Explore computational rigor"
+        );
+        assert_eq!(retrieved.interface_states[0].flow_state.resonance, 7);
+        assert_eq!(retrieved.interface_states[0].flow_state.emergence.len(), 2);
+
+        assert_eq!(
+            retrieved.interface_states[1].domains,
+            ("SCI".to_string(), "CULT".to_string())
+        );
+        assert_eq!(retrieved.interface_states[1].permeability, 6);
+
+        assert_eq!(
+            retrieved.qualities, qualities,
+            "qualities should persist exactly"
+        );
+        assert_eq!(
+            retrieved.developmental_stage, 3,
+            "developmental_stage should persist"
+        );
+
+        // Also verify basic fields still work
+        assert_eq!(retrieved.domain_values.len(), 2);
+        assert_eq!(retrieved.identity_anchor_ids.len(), 2);
+        assert_eq!(retrieved.pattern_ids.len(), 1);
     }
 }

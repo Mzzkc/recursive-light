@@ -84,15 +84,15 @@ impl TokenOptimizer {
 mod tests {
     use super::*;
     use crate::prompt_engine::{BoundaryState, DomainState};
+    use crate::test_utils::setup_test_db;
 
     #[tokio::test]
     async fn test_token_optimizer() {
         let token_optimizer = TokenOptimizer::new(1024);
 
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let memory_manager = crate::memory::MemoryManager::new(&database_url)
-            .await
-            .unwrap();
+        // Use in-memory database for testing
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = crate::memory::MemoryManager { db_pool };
 
         // Create a test user first (required by foreign key constraint)
         let user_id = uuid::Uuid::new_v4();

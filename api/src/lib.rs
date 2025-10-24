@@ -7,6 +7,9 @@ pub mod mock_llm;
 pub mod prompt_engine;
 mod token_optimization;
 
+#[cfg(test)]
+mod test_utils;
+
 use autonomous_judgement::{AutonomousJudgementModule, Factors, Intention, Prototype};
 use domains::{ComputationalDomain, CulturalDomain, ExperientialDomain, ScientificDomain};
 use flow_process::{FlowContext, FlowProcess};
@@ -361,6 +364,7 @@ impl VifApi {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use test_utils::setup_test_db;
 
     #[tokio::test]
     async fn test_vif_api() {
@@ -403,10 +407,52 @@ mod tests {
 
         // Use mock LLM for testing (no API key needed)
         let provider = Box::new(mock_llm::MockLlm::echo());
-        let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let mut vif_api = VifApi::new(provider, framework_state, &database_url)
-            .await
-            .unwrap();
+
+        // Use in-memory database for testing - we'll create VifApi manually since
+        // VifApi::new expects a database_url string, but we want to use an in-memory pool
+        let db_pool = setup_test_db().await.unwrap();
+
+        // Build VifApi manually with in-memory database
+        let mut framework_state = framework_state;
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager { db_pool };
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![
+            Prototype::new("Direct Response".to_string(), 0.9, 0.95),
+            Prototype::new("Enhanced Response".to_string(), 0.7, 0.85),
+        ];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        let mut vif_api = VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        };
 
         // Create a test user first (required by foreign key constraint)
         let user_id = Uuid::new_v4();
