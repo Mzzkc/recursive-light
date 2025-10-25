@@ -62,6 +62,296 @@ pub struct PhenomenologicalQuality {
     pub coherence: f64,
 }
 
+/// Trait for calculating individual phenomenological qualities
+#[allow(dead_code)]
+pub trait QualityCalculator {
+    fn name(&self) -> &str;
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64;
+}
+
+/// Clarity: How well concepts from both domains are defined and related
+pub struct ClarityCalculator;
+
+impl QualityCalculator for ClarityCalculator {
+    fn name(&self) -> &str {
+        "clarity"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Clarity emerges when:
+        // 1. Permeability is high (concepts can cross boundaries clearly)
+        // 2. Message has moderate length (enough detail without overwhelming)
+        // 3. Boundary is stable (low amplitude oscillation)
+
+        let permeability_factor = boundary.permeability;
+        let length_factor = self.message_length_score(message);
+        let stability_factor = 1.0 - boundary.amplitude.min(1.0);
+
+        (0.5 * permeability_factor + 0.3 * length_factor + 0.2 * stability_factor).min(1.0)
+    }
+}
+
+impl ClarityCalculator {
+    fn message_length_score(&self, message: &str) -> f64 {
+        let len = message.len();
+        // Optimal clarity around 100-500 chars
+        if len < 50 {
+            len as f64 / 50.0 * 0.5 // Too short, low clarity
+        } else if len <= 500 {
+            0.5 + ((len - 50) as f64 / 450.0) * 0.5 // Optimal range
+        } else {
+            1.0 - ((len - 500) as f64 / 1000.0).min(0.3) // Too long, slight penalty
+        }
+    }
+}
+
+/// Depth: Multiple layers of understanding present
+pub struct DepthCalculator;
+
+impl QualityCalculator for DepthCalculator {
+    fn name(&self) -> &str {
+        "depth"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Depth emerges when:
+        // 1. Oscillation amplitude is high (exploring range of possibilities)
+        // 2. Message contains layered concepts (approximated by word count)
+        // 3. Permeability allows deep integration
+
+        let amplitude_factor = boundary.amplitude.min(1.0);
+        let complexity_factor = self.message_complexity_score(message);
+        let integration_factor = boundary.permeability;
+
+        (0.4 * amplitude_factor + 0.3 * complexity_factor + 0.3 * integration_factor).min(1.0)
+    }
+}
+
+impl DepthCalculator {
+    fn message_complexity_score(&self, message: &str) -> f64 {
+        let word_count = message.split_whitespace().count();
+        // Deeper messages have more concepts (approximated by word count)
+        if word_count < 10 {
+            word_count as f64 / 10.0 * 0.5
+        } else if word_count <= 100 {
+            0.5 + ((word_count - 10) as f64 / 90.0) * 0.5
+        } else {
+            1.0
+        }
+    }
+}
+
+/// Openness: Creating space for new possibilities
+pub struct OpennessCalculator;
+
+impl QualityCalculator for OpennessCalculator {
+    fn name(&self) -> &str {
+        "openness"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Openness emerges when:
+        // 1. Permeability is moderate (not too rigid, not dissolved)
+        // 2. Message contains questions or uncertainty markers
+        // 3. Boundary is in transitional state
+
+        let permeability_openness = 1.0 - (boundary.permeability - 0.5).abs() * 2.0;
+        let inquiry_factor = self.inquiry_score(message);
+        let transition_factor = if boundary.status == "Transitional" {
+            0.8
+        } else {
+            0.5
+        };
+
+        (0.4 * permeability_openness + 0.3 * inquiry_factor + 0.3 * transition_factor).min(1.0)
+    }
+}
+
+impl OpennessCalculator {
+    fn inquiry_score(&self, message: &str) -> f64 {
+        // Count question marks and uncertainty words as indicators of openness
+        let question_count = message.matches('?').count();
+        let uncertainty_words = ["maybe", "perhaps", "might", "could", "possible", "wonder"];
+        let uncertainty_count = uncertainty_words
+            .iter()
+            .map(|word| message.to_lowercase().matches(word).count())
+            .sum::<usize>();
+
+        ((question_count + uncertainty_count) as f64 / 5.0).min(1.0)
+    }
+}
+
+/// Precision: Refined understanding transcending either domain alone
+pub struct PrecisionCalculator;
+
+impl QualityCalculator for PrecisionCalculator {
+    fn name(&self) -> &str {
+        "precision"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Precision emerges when:
+        // 1. Frequency is high (rapid oscillation refines understanding)
+        // 2. Permeability is high (allows precise transfer)
+        // 3. Message has specific terminology
+
+        let frequency_factor = (boundary.frequency / 2.0).min(1.0); // Normalize assuming max ~2Hz
+        let permeability_factor = boundary.permeability;
+        let specificity_factor = self.specificity_score(message);
+
+        (0.4 * frequency_factor + 0.3 * permeability_factor + 0.3 * specificity_factor).min(1.0)
+    }
+}
+
+impl PrecisionCalculator {
+    fn specificity_score(&self, message: &str) -> f64 {
+        // Longer average word length suggests more specific/technical terminology
+        let words: Vec<&str> = message.split_whitespace().collect();
+        if words.is_empty() {
+            return 0.3;
+        }
+
+        let avg_word_length =
+            words.iter().map(|w| w.len()).sum::<usize>() as f64 / words.len() as f64;
+        // Average word length of 5-7 chars suggests good precision
+        if avg_word_length < 4.0 {
+            avg_word_length / 4.0 * 0.5
+        } else if avg_word_length <= 7.0 {
+            0.5 + ((avg_word_length - 4.0) / 3.0) * 0.5
+        } else {
+            1.0
+        }
+    }
+}
+
+/// Fluidity: Movement between perspectives
+pub struct FluidityCalculator;
+
+impl QualityCalculator for FluidityCalculator {
+    fn name(&self) -> &str {
+        "fluidity"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Fluidity emerges when:
+        // 1. Amplitude is moderate-high (allowing movement)
+        // 2. Frequency is moderate (not too fast, not static)
+        // 3. Message shows perspective shifts
+
+        let amplitude_factor = boundary.amplitude.min(1.0);
+        let frequency_factor = 1.0 - (boundary.frequency - 1.0).abs().min(1.0);
+        let shift_factor = self.perspective_shift_score(message);
+
+        (0.4 * amplitude_factor + 0.3 * frequency_factor + 0.3 * shift_factor).min(1.0)
+    }
+}
+
+impl FluidityCalculator {
+    fn perspective_shift_score(&self, message: &str) -> f64 {
+        // Count transition words that suggest perspective shifts
+        let transitions = [
+            "however",
+            "but",
+            "although",
+            "while",
+            "yet",
+            "whereas",
+            "alternatively",
+        ];
+        let transition_count = transitions
+            .iter()
+            .map(|word| message.to_lowercase().matches(word).count())
+            .sum::<usize>();
+
+        (transition_count as f64 / 3.0).min(1.0)
+    }
+}
+
+/// Resonance: Harmonic quality between domains
+pub struct ResonanceCalculator;
+
+impl QualityCalculator for ResonanceCalculator {
+    fn name(&self) -> &str {
+        "resonance"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Resonance emerges when:
+        // 1. Phase is aligned (cosine of phase angle)
+        // 2. Oscillation is active (frequency * amplitude product)
+        // 3. Message has rhythmic or repetitive elements
+
+        let phase_factor = (boundary.phase.cos() + 1.0) / 2.0; // Normalize to 0-1
+        let oscillation_factor = (boundary.frequency * boundary.amplitude).min(1.0);
+        let rhythm_factor = self.rhythm_score(message);
+
+        (0.4 * phase_factor + 0.4 * oscillation_factor + 0.2 * rhythm_factor).min(1.0)
+    }
+}
+
+impl ResonanceCalculator {
+    fn rhythm_score(&self, message: &str) -> f64 {
+        // Simple heuristic: repeated words suggest rhythmic patterns
+        let words: Vec<&str> = message.split_whitespace().collect();
+        if words.len() < 5 {
+            return 0.3;
+        }
+
+        let unique_words: std::collections::HashSet<&str> = words.iter().copied().collect();
+        let repetition_ratio = 1.0 - (unique_words.len() as f64 / words.len() as f64);
+
+        (repetition_ratio * 2.0).min(1.0)
+    }
+}
+
+/// Coherence: Logical consistency across integration
+pub struct CoherenceCalculator;
+
+impl QualityCalculator for CoherenceCalculator {
+    fn name(&self) -> &str {
+        "coherence"
+    }
+
+    fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64 {
+        // Coherence emerges when:
+        // 1. Permeability is high (allowing unified understanding)
+        // 2. Amplitude is low-moderate (stable integration)
+        // 3. Message has logical structure
+
+        let permeability_factor = boundary.permeability;
+        let stability_factor = 1.0 - (boundary.amplitude - 0.3).abs().min(0.7) / 0.7;
+        let structure_factor = self.structure_score(message);
+
+        (0.4 * permeability_factor + 0.3 * stability_factor + 0.3 * structure_factor).min(1.0)
+    }
+}
+
+impl CoherenceCalculator {
+    fn structure_score(&self, message: &str) -> f64 {
+        // Coherent messages have balanced sentence structure
+        let sentences: Vec<&str> = message.split(['.', '!', '?']).collect();
+        if sentences.len() < 2 {
+            return 0.5;
+        }
+
+        let avg_sentence_length = sentences
+            .iter()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| s.split_whitespace().count())
+            .sum::<usize>() as f64
+            / sentences.len().max(1) as f64;
+
+        // Coherent messages have 10-20 words per sentence on average
+        if avg_sentence_length < 5.0 {
+            avg_sentence_length / 5.0 * 0.5
+        } else if avg_sentence_length <= 20.0 {
+            0.5 + ((avg_sentence_length - 5.0) / 15.0) * 0.5
+        } else {
+            1.0 - ((avg_sentence_length - 20.0) / 30.0).min(0.3)
+        }
+    }
+}
+
 /// Pattern observation for lifecycle tracking
 /// TODO(Phase 5): Implement full pattern lifecycle with these fields
 #[derive(Debug, Clone)]
@@ -1151,6 +1441,260 @@ mod tests {
         assert!(
             !boundaries_by_activation.is_empty(),
             "Should have boundaries affected by domain cascade"
+        );
+    }
+
+    // ============================================================
+    // PHASE 3: Quality Calculation Tests
+    // ============================================================
+
+    #[test]
+    fn test_clarity_calculator() {
+        // Given a boundary with high permeability and a moderate-length message
+        let boundary = BoundaryState::new("CD-SD".to_string(), 0.8, "Transcendent".to_string());
+        let message = "This is a test message with moderate length that should produce good clarity. It contains enough detail to be clear without being overwhelming.";
+
+        // When clarity is calculated
+        let calculator = ClarityCalculator;
+        let clarity = calculator.calculate(&boundary, message);
+
+        // Then clarity should be reasonably high (>0.5) due to high permeability and good message length
+        assert!(clarity > 0.5, "Clarity should be >0.5, got: {}", clarity);
+        assert!(clarity <= 1.0, "Clarity should be ≤1.0, got: {}", clarity);
+
+        // Test with very short message (should have lower clarity)
+        let short_message = "Hi";
+        let short_clarity = calculator.calculate(&boundary, short_message);
+        assert!(
+            short_clarity < clarity,
+            "Short message should have lower clarity"
+        );
+
+        // Test with low permeability boundary (should reduce clarity)
+        let rigid_boundary = BoundaryState::new("CD-SD".to_string(), 0.2, "Maintained".to_string());
+        let low_perm_clarity = calculator.calculate(&rigid_boundary, message);
+        assert!(
+            low_perm_clarity < clarity,
+            "Low permeability should reduce clarity"
+        );
+    }
+
+    #[test]
+    fn test_depth_calculator() {
+        // Given a boundary with high amplitude and a complex message
+        let mut boundary = BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.5,
+            "Transitional".to_string(),
+            1.0, // frequency
+            0.8, // high amplitude for deep exploration
+            0.0, // phase
+        );
+        let complex_message = "This message explores multiple interconnected concepts across different domains. It delves into philosophical implications while maintaining technical precision. The layered nature of this analysis suggests significant depth in understanding.";
+
+        // When depth is calculated
+        let calculator = DepthCalculator;
+        let depth = calculator.calculate(&boundary, complex_message);
+
+        // Then depth should be reasonably high due to amplitude and complexity
+        assert!(
+            depth > 0.5,
+            "Depth should be >0.5 for complex message with high amplitude, got: {}",
+            depth
+        );
+
+        // Test with simple message (should have lower depth)
+        let simple_message = "Hello world";
+        let simple_depth = calculator.calculate(&boundary, simple_message);
+        assert!(
+            simple_depth < depth,
+            "Simple message should have lower depth"
+        );
+
+        // Test with low amplitude (should reduce depth)
+        boundary.amplitude = 0.1;
+        let low_amp_depth = calculator.calculate(&boundary, complex_message);
+        assert!(low_amp_depth < depth, "Low amplitude should reduce depth");
+    }
+
+    #[test]
+    fn test_openness_calculator() {
+        // Given a transitional boundary with moderate permeability and a questioning message
+        let boundary = BoundaryState::new("SD-CuD".to_string(), 0.5, "Transitional".to_string());
+        let questioning_message = "How might we approach this problem? Could there be alternative perspectives? Perhaps we should consider other possibilities?";
+
+        // When openness is calculated
+        let calculator = OpennessCalculator;
+        let openness = calculator.calculate(&boundary, questioning_message);
+
+        // Then openness should be high due to questions and transitional state
+        assert!(
+            openness > 0.5,
+            "Openness should be >0.5 for questioning message in transitional state, got: {}",
+            openness
+        );
+
+        // Test with declarative message (should have lower openness)
+        let declarative_message = "This is the solution. It is correct. There are no alternatives.";
+        let declarative_openness = calculator.calculate(&boundary, declarative_message);
+        assert!(
+            declarative_openness < openness,
+            "Declarative message should have lower openness"
+        );
+
+        // Test with transcendent boundary (should have moderate openness)
+        let transcendent_boundary =
+            BoundaryState::new("SD-CuD".to_string(), 0.9, "Transcendent".to_string());
+        let transcendent_openness =
+            calculator.calculate(&transcendent_boundary, questioning_message);
+        // Transcendent boundaries are less open (dissolved) than transitional
+        assert!(
+            transcendent_openness < openness,
+            "Transcendent boundary should have lower openness than transitional"
+        );
+    }
+
+    #[test]
+    fn test_precision_calculator() {
+        // Given a boundary with high frequency and specific technical message
+        let boundary = BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.8,
+            "Transcendent".to_string(),
+            2.0, // high frequency for precision
+            0.1,
+            0.0,
+        );
+        let technical_message = "The algorithmic implementation utilizes sophisticated mathematical formulations to optimize computational efficiency.";
+
+        // When precision is calculated
+        let calculator = PrecisionCalculator;
+        let precision = calculator.calculate(&boundary, technical_message);
+
+        // Then precision should be high due to frequency and technical terminology
+        assert!(
+            precision > 0.5,
+            "Precision should be >0.5 for technical message with high frequency, got: {}",
+            precision
+        );
+
+        // Test with simple vocabulary (should have lower precision)
+        let simple_message = "The code runs fast and works good.";
+        let simple_precision = calculator.calculate(&boundary, simple_message);
+        assert!(
+            simple_precision < precision,
+            "Simple vocabulary should have lower precision"
+        );
+
+        // Test with low frequency (should reduce precision)
+        let low_freq_boundary = BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.8,
+            "Transcendent".to_string(),
+            0.3, // low frequency
+            0.1,
+            0.0,
+        );
+        let low_freq_precision = calculator.calculate(&low_freq_boundary, technical_message);
+        assert!(
+            low_freq_precision < precision,
+            "Low frequency should reduce precision"
+        );
+    }
+
+    #[test]
+    fn test_fluidity_calculator() {
+        // Given a boundary with moderate amplitude and frequency, and a message with perspective shifts
+        let boundary = BoundaryState::with_oscillation(
+            "CD-ED".to_string(),
+            0.6,
+            "Transitional".to_string(),
+            1.0, // moderate frequency
+            0.5, // moderate amplitude for fluidity
+            0.0,
+        );
+        let shifting_message = "The technical analysis suggests one approach, however the experiential data indicates alternatives. While logic points this way, intuition suggests otherwise.";
+
+        // When fluidity is calculated
+        let calculator = FluidityCalculator;
+        let fluidity = calculator.calculate(&boundary, shifting_message);
+
+        // Then fluidity should be reasonably high due to amplitude and transition words
+        assert!(
+            fluidity > 0.4,
+            "Fluidity should be >0.4 for message with perspective shifts, got: {}",
+            fluidity
+        );
+
+        // Test with static message (should have lower fluidity)
+        let static_message = "The analysis is complete. The results are final.";
+        let static_fluidity = calculator.calculate(&boundary, static_message);
+        assert!(
+            static_fluidity < fluidity,
+            "Static message should have lower fluidity"
+        );
+
+        // Test with very high frequency (should reduce fluidity - too fast)
+        let high_freq_boundary = BoundaryState::with_oscillation(
+            "CD-ED".to_string(),
+            0.6,
+            "Transitional".to_string(),
+            5.0, // very high frequency
+            0.5,
+            0.0,
+        );
+        let high_freq_fluidity = calculator.calculate(&high_freq_boundary, shifting_message);
+        assert!(
+            high_freq_fluidity < fluidity,
+            "Very high frequency should reduce fluidity"
+        );
+    }
+
+    #[test]
+    fn test_resonance_calculator() {
+        // Given a boundary with aligned phase (0 or 2π) and active oscillation
+        let boundary = BoundaryState::with_oscillation(
+            "CuD-ED".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            1.5, // frequency
+            0.6, // amplitude
+            0.0, // phase aligned (cos(0) = 1)
+        );
+        let message = "Understanding emerges emerges through iterative iterative exploration exploration of patterns patterns.";
+
+        // When resonance is calculated
+        let calculator = ResonanceCalculator;
+        let resonance = calculator.calculate(&boundary, message);
+
+        // Then resonance should be reasonably high due to phase alignment and repetitive patterns
+        assert!(
+            resonance > 0.5,
+            "Resonance should be >0.5 for aligned phase and repetitive message, got: {}",
+            resonance
+        );
+
+        // Test with opposite phase (should reduce resonance)
+        let opposite_boundary = BoundaryState::with_oscillation(
+            "CuD-ED".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            1.5,
+            0.6,
+            std::f64::consts::PI, // phase = π (cos(π) = -1, opposite)
+        );
+        let opposite_resonance = calculator.calculate(&opposite_boundary, message);
+        assert!(
+            opposite_resonance < resonance,
+            "Opposite phase should reduce resonance"
+        );
+
+        // Test with unique words (should reduce resonance)
+        let unique_message = "Each word different never repeated always fresh constantly changing perpetually novel.";
+        let unique_resonance = calculator.calculate(&boundary, unique_message);
+        assert!(
+            unique_resonance < resonance,
+            "Message with unique words should have lower resonance"
         );
     }
 }
