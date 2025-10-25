@@ -16,16 +16,8 @@ async fn main() {
     let framework_state = FrameworkState {
         domain_registry,
         boundaries: vec![
-            prompt_engine::BoundaryState {
-                name: "CD-SD".to_string(),
-                permeability: 0.8,
-                status: "Active".to_string(),
-            },
-            prompt_engine::BoundaryState {
-                name: "SD-CuD".to_string(),
-                permeability: 0.5,
-                status: "Active".to_string(),
-            },
+            prompt_engine::BoundaryState::new("CD-SD".to_string(), 0.8, "Active".to_string()),
+            prompt_engine::BoundaryState::new("SD-CuD".to_string(), 0.5, "Active".to_string()),
         ],
         identity: "User Identity".to_string(),
     };

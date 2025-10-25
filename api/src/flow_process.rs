@@ -616,21 +616,9 @@ mod tests {
         FrameworkState {
             domain_registry: DomainRegistry::new(),
             boundaries: vec![
-                BoundaryState {
-                    name: "CD-SD".to_string(),
-                    permeability: 0.5,
-                    status: "Maintained".to_string(),
-                },
-                BoundaryState {
-                    name: "SD-CuD".to_string(),
-                    permeability: 0.7,
-                    status: "Transitional".to_string(),
-                },
-                BoundaryState {
-                    name: "CuD-ED".to_string(),
-                    permeability: 0.85,
-                    status: "Transcendent".to_string(),
-                },
+                BoundaryState::new("CD-SD".to_string(), 0.5, "Maintained".to_string()),
+                BoundaryState::new("SD-CuD".to_string(), 0.7, "Transitional".to_string()),
+                BoundaryState::new("CuD-ED".to_string(), 0.85, "Transcendent".to_string()),
             ],
             identity: "Test Identity".to_string(),
         }
@@ -705,16 +693,8 @@ mod tests {
 
         // Add boundaries
         context.boundaries = vec![
-            BoundaryState {
-                name: "CD-SD".to_string(),
-                permeability: 0.9,
-                status: "Transcendent".to_string(),
-            },
-            BoundaryState {
-                name: "SD-CuD".to_string(),
-                permeability: 0.4,
-                status: "Maintained".to_string(),
-            },
+            BoundaryState::new("CD-SD".to_string(), 0.9, "Transcendent".to_string()),
+            BoundaryState::new("SD-CuD".to_string(), 0.4, "Maintained".to_string()),
         ];
 
         let processor = InterfaceAttentionProcessor;
@@ -756,16 +736,8 @@ mod tests {
             FlowContext::new("Test input".to_string(), 0.7, create_test_framework_state());
 
         context.boundaries = vec![
-            BoundaryState {
-                name: "CD-ED".to_string(),
-                permeability: 0.9,
-                status: "Transcendent".to_string(),
-            },
-            BoundaryState {
-                name: "SD-CuD".to_string(),
-                permeability: 0.5,
-                status: "Maintained".to_string(),
-            },
+            BoundaryState::new("CD-ED".to_string(), 0.9, "Transcendent".to_string()),
+            BoundaryState::new("SD-CuD".to_string(), 0.5, "Maintained".to_string()),
         ];
 
         let processor = QualityEmergenceProcessor;
@@ -806,11 +778,11 @@ mod tests {
             .insert("CD".to_string(), DomainActivation { activation: 0.9 });
 
         // Add boundaries
-        context.boundaries = vec![BoundaryState {
-            name: "CD-SD".to_string(),
-            permeability: 0.9,
-            status: "Transcendent".to_string(),
-        }];
+        context.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.9,
+            "Transcendent".to_string(),
+        )];
 
         // Add interface experiences
         context.interface_experiences.push(InterfaceExperience {
@@ -872,11 +844,11 @@ mod tests {
             .insert("SD".to_string(), DomainActivation { activation: 0.8 });
 
         // Add transcendent boundary
-        context.boundaries.push(BoundaryState {
-            name: "CD-SD".to_string(),
-            permeability: 0.95,
-            status: "Transcendent".to_string(),
-        });
+        context.boundaries.push(BoundaryState::new(
+            "CD-SD".to_string(),
+            0.95,
+            "Transcendent".to_string(),
+        ));
 
         let processor = ContinuityProcessor;
 
@@ -904,26 +876,10 @@ mod tests {
 
         // Add multiple transcendent boundaries
         context.boundaries = vec![
-            BoundaryState {
-                name: "CD-SD".to_string(),
-                permeability: 0.9,
-                status: "Transcendent".to_string(),
-            },
-            BoundaryState {
-                name: "SD-CuD".to_string(),
-                permeability: 0.85,
-                status: "Transcendent".to_string(),
-            },
-            BoundaryState {
-                name: "CuD-ED".to_string(),
-                permeability: 0.88,
-                status: "Transcendent".to_string(),
-            },
-            BoundaryState {
-                name: "ED-CD".to_string(),
-                permeability: 0.92,
-                status: "Transcendent".to_string(),
-            },
+            BoundaryState::new("CD-SD".to_string(), 0.9, "Transcendent".to_string()),
+            BoundaryState::new("SD-CuD".to_string(), 0.85, "Transcendent".to_string()),
+            BoundaryState::new("CuD-ED".to_string(), 0.88, "Transcendent".to_string()),
+            BoundaryState::new("ED-CD".to_string(), 0.92, "Transcendent".to_string()),
         ];
 
         // Add high-quality emergences
@@ -1000,11 +956,11 @@ mod tests {
 
         // Stage 1: Recognition - few transcendent boundaries, low quality
         let mut context1 = FlowContext::new("Test".to_string(), 0.7, create_test_framework_state());
-        context1.boundaries = vec![BoundaryState {
-            name: "CD-SD".to_string(),
-            permeability: 0.5,
-            status: "Maintained".to_string(),
-        }];
+        context1.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.5,
+            "Maintained".to_string(),
+        )];
         let processor = EvolutionProcessor;
         processor.process(&mut context1).unwrap();
         assert_eq!(
@@ -1014,11 +970,11 @@ mod tests {
 
         // Stage 2: Integration - one transcendent boundary, moderate quality
         let mut context2 = FlowContext::new("Test".to_string(), 0.7, create_test_framework_state());
-        context2.boundaries = vec![BoundaryState {
-            name: "CD-SD".to_string(),
-            permeability: 0.75,
-            status: "Transcendent".to_string(),
-        }];
+        context2.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.75,
+            "Transcendent".to_string(),
+        )];
         context2.emergent_qualities.push(PhenomenologicalQuality {
             boundary_name: "CD-SD".to_string(),
             clarity: 0.6,
@@ -1038,11 +994,11 @@ mod tests {
         // Stage 3: Transcendence - many transcendent boundaries, high quality
         let mut context3 = FlowContext::new("Test".to_string(), 0.7, create_test_framework_state());
         for i in 0..5 {
-            context3.boundaries.push(BoundaryState {
-                name: format!("Boundary-{}", i),
-                permeability: 0.9,
-                status: "Transcendent".to_string(),
-            });
+            context3.boundaries.push(BoundaryState::new(
+                format!("Boundary-{}", i),
+                0.9,
+                "Transcendent".to_string(),
+            ));
             context3.emergent_qualities.push(PhenomenologicalQuality {
                 boundary_name: format!("Boundary-{}", i),
                 clarity: 0.9,

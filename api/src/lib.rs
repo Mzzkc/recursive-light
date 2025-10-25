@@ -391,36 +391,12 @@ mod tests {
         let framework_state = FrameworkState {
             domain_registry: prompt_engine::DomainRegistry::new(),
             boundaries: vec![
-                prompt_engine::BoundaryState {
-                    name: "CD-SD".to_string(),
-                    permeability: 0.8,
-                    status: "Active".to_string(),
-                },
-                prompt_engine::BoundaryState {
-                    name: "SD-CuD".to_string(),
-                    permeability: 0.7,
-                    status: "Active".to_string(),
-                },
-                prompt_engine::BoundaryState {
-                    name: "CuD-ED".to_string(),
-                    permeability: 0.6,
-                    status: "Active".to_string(),
-                },
-                prompt_engine::BoundaryState {
-                    name: "ED-CD".to_string(),
-                    permeability: 0.5,
-                    status: "Active".to_string(),
-                },
-                prompt_engine::BoundaryState {
-                    name: "CD-CuD".to_string(),
-                    permeability: 0.4,
-                    status: "Active".to_string(),
-                },
-                prompt_engine::BoundaryState {
-                    name: "SD-ED".to_string(),
-                    permeability: 0.3,
-                    status: "Active".to_string(),
-                },
+                prompt_engine::BoundaryState::new("CD-SD".to_string(), 0.8, "Active".to_string()),
+                prompt_engine::BoundaryState::new("SD-CuD".to_string(), 0.7, "Active".to_string()),
+                prompt_engine::BoundaryState::new("CuD-ED".to_string(), 0.6, "Active".to_string()),
+                prompt_engine::BoundaryState::new("ED-CD".to_string(), 0.5, "Active".to_string()),
+                prompt_engine::BoundaryState::new("CD-CuD".to_string(), 0.4, "Active".to_string()),
+                prompt_engine::BoundaryState::new("SD-ED".to_string(), 0.3, "Active".to_string()),
             ],
             identity: "User Identity".to_string(),
         };
@@ -548,11 +524,11 @@ mod tests {
         // Test that LLM authentication errors propagate through the entire VifApi stack
         let framework_state = FrameworkState {
             domain_registry: prompt_engine::DomainRegistry::new(),
-            boundaries: vec![prompt_engine::BoundaryState {
-                name: "CD-SD".to_string(),
-                permeability: 0.8,
-                status: "Active".to_string(),
-            }],
+            boundaries: vec![prompt_engine::BoundaryState::new(
+                "CD-SD".to_string(),
+                0.8,
+                "Active".to_string(),
+            )],
             identity: "Test User".to_string(),
         };
 

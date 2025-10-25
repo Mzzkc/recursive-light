@@ -469,16 +469,8 @@ mod tests {
         ];
 
         let boundaries = vec![
-            BoundaryState {
-                name: "CD-SD".to_string(),
-                permeability: 0.8,
-                status: "Active".to_string(),
-            },
-            BoundaryState {
-                name: "SD-CuD".to_string(),
-                permeability: 0.5,
-                status: "Active".to_string(),
-            },
+            BoundaryState::new("CD-SD".to_string(), 0.8, "Active".to_string()),
+            BoundaryState::new("SD-CuD".to_string(), 0.5, "Active".to_string()),
         ];
 
         let patterns = vec!["Pattern 1".to_string(), "Pattern 2".to_string()];
@@ -841,11 +833,11 @@ mod tests {
                     state: format!("0.{}", i),
                 }];
 
-                let boundaries = vec![BoundaryState {
-                    name: "CD-SD".to_string(), // Use proper boundary format (domain-domain)
-                    permeability: 0.5 + (i as f64 * 0.01),
-                    status: "Active".to_string(),
-                }];
+                let boundaries = vec![BoundaryState::new(
+                    "CD-SD".to_string(), // Use proper boundary format (domain-domain)
+                    0.5 + (i as f64 * 0.01),
+                    "Active".to_string(),
+                )];
 
                 let patterns = vec![format!("pattern_{}", i)];
 

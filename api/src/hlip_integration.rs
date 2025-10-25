@@ -71,21 +71,9 @@ mod tests {
         FrameworkState {
             domain_registry: registry,
             boundaries: vec![
-                BoundaryState {
-                    name: "CD-SD".to_string(),
-                    permeability: 0.5,
-                    status: "Maintained".to_string(),
-                },
-                BoundaryState {
-                    name: "SD-CuD".to_string(),
-                    permeability: 0.6,
-                    status: "Maintained".to_string(),
-                },
-                BoundaryState {
-                    name: "CuD-ED".to_string(),
-                    permeability: 0.7,
-                    status: "Active".to_string(),
-                },
+                BoundaryState::new("CD-SD".to_string(), 0.5, "Maintained".to_string()),
+                BoundaryState::new("SD-CuD".to_string(), 0.6, "Maintained".to_string()),
+                BoundaryState::new("CuD-ED".to_string(), 0.7, "Active".to_string()),
             ],
             identity: "Test Identity".to_string(),
         }
