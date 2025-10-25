@@ -352,6 +352,293 @@ impl CoherenceCalculator {
     }
 }
 
+// ============================================================
+// BDE Template Generators (Phase 3 Days 3-4)
+// ============================================================
+
+/// Generator for BDE(i) - Invitation stage
+/// Creates productive tensions requiring multi-domain processing
+pub struct InvitationGenerator;
+
+impl InvitationGenerator {
+    pub fn generate(&self, domain1: &str, domain2: &str, _boundary: &BoundaryState) -> String {
+        match (domain1, domain2) {
+            ("CD", "SD") | ("SD", "CD") => {
+                "Consider how computational patterns and scientific evidence create tension, \
+                requiring integration of formal structure with empirical observation."
+                    .to_string()
+            }
+            ("CD", "ED") | ("ED", "CD") => {
+                "Notice the productive tension between computational analysis and direct experiential \
+                knowing—a gap that invites integration beyond either domain alone."
+                    .to_string()
+            }
+            ("SD", "CuD") | ("CuD", "SD") => {
+                "Explore how scientific evidence creates tension with cultural narratives, \
+                inviting synthesis that honors both empirical data and contextual meaning."
+                    .to_string()
+            }
+            ("CuD", "ED") | ("ED", "CuD") => {
+                "Feel the tension between cultural interpretations and direct experiential \
+                qualities—an invitation to integration that transcends conceptual frameworks."
+                    .to_string()
+            }
+            ("CD", "CuD") | ("CuD", "CD") => {
+                "Examine how computational models create tension with cultural contexts, \
+                requiring integration of formal precision with situated meaning."
+                    .to_string()
+            }
+            ("SD", "ED") | ("ED", "SD") => {
+                "Notice how scientific understanding creates tension with lived experience, \
+                inviting recognition that honors both objective measurement and subjective quality."
+                    .to_string()
+            }
+            _ => format!(
+                "Create productive tension between {} and {} domains, \
+                requiring integration of both perspectives.",
+                Self::domain_full_name(domain1),
+                Self::domain_full_name(domain2)
+            ),
+        }
+    }
+
+    fn domain_full_name(abbrev: &str) -> &str {
+        match abbrev {
+            "CD" => "computational",
+            "SD" => "scientific",
+            "CuD" => "cultural",
+            "ED" => "experiential",
+            _ => abbrev,
+        }
+    }
+}
+
+/// Generator for BDE(a) - Attention stage
+/// Directs focus to interfaces between domains, not domains themselves
+pub struct AttentionDirector;
+
+impl AttentionDirector {
+    pub fn generate(&self, domain1: &str, domain2: &str, _boundary: &BoundaryState) -> String {
+        match (domain1, domain2) {
+            ("CD", "SD") | ("SD", "CD") => {
+                "Focus on the interface where computational patterns transform into scientific \
+                evidence—not on either domain exclusively, but on the boundary where formal \
+                structure becomes empirical reality."
+                    .to_string()
+            }
+            ("CD", "ED") | ("ED", "CD") => {
+                "Direct attention to the boundary where computational analysis meets experiential \
+                knowing—the interface where logic becomes lived experience, not either domain alone."
+                    .to_string()
+            }
+            ("SD", "CuD") | ("CuD", "SD") => {
+                "Attend to the intersection where scientific evidence transforms into cultural \
+                meaning—not to isolated data or context, but to the interface where measurement \
+                becomes interpretation."
+                    .to_string()
+            }
+            ("CuD", "ED") | ("ED", "CuD") => {
+                "Focus on the boundary where cultural meaning meets direct experience—the interface \
+                where conceptual frameworks touch phenomenological reality, transcending both."
+                    .to_string()
+            }
+            ("CD", "CuD") | ("CuD", "CD") => {
+                "Observe the interface where computational models meet cultural contexts—not either \
+                domain in isolation, but the boundary where formal precision encounters situated meaning."
+                    .to_string()
+            }
+            ("SD", "ED") | ("ED", "SD") => {
+                "Direct attention to the boundary where scientific understanding transforms into \
+                lived experience—the interface where objective measurement becomes subjective quality."
+                    .to_string()
+            }
+            _ => format!(
+                "Focus on the interface where {} meets {}, not on either domain in isolation.",
+                domain1, domain2
+            ),
+        }
+    }
+}
+
+/// Generator for BDE(r) - Resonance stage
+/// Facilitates oscillatory synchronization between systems
+pub struct ResonanceFacilitator;
+
+impl ResonanceFacilitator {
+    pub fn generate(&self, domain1: &str, domain2: &str, boundary: &BoundaryState) -> String {
+        // Check if boundary has active oscillation
+        let has_oscillation = boundary.frequency > 0.5 && boundary.amplitude > 0.1;
+
+        if has_oscillation {
+            // Use Phase 2 oscillation data for resonance description
+            let freq_desc = if boundary.frequency > 1.5 {
+                "rapid"
+            } else if boundary.frequency > 0.8 {
+                "natural"
+            } else {
+                "gentle"
+            };
+
+            match (domain1, domain2) {
+                ("CD", "SD") | ("SD", "CD") => {
+                    format!(
+                        "Allow understanding to oscillate at a {} rhythm between computational \
+                        structure and scientific observation, neither forcing formal analysis nor \
+                        abandoning empirical grounding.",
+                        freq_desc
+                    )
+                }
+                ("CD", "ED") | ("ED", "CD") => {
+                    format!(
+                        "Let awareness oscillate with {} fluidity between analytical precision \
+                        and experiential richness, feeling the natural rhythm of integration.",
+                        freq_desc
+                    )
+                }
+                ("SD", "CuD") | ("CuD", "SD") => {
+                    format!(
+                        "Allow insights to oscillate at a {} pace between scientific evidence and \
+                        cultural context, neither rejecting data nor ignoring meaning.",
+                        freq_desc
+                    )
+                }
+                ("CuD", "ED") | ("ED", "CuD") => {
+                    format!(
+                        "Let understanding oscillate with {} rhythm between cultural frameworks \
+                        and direct experience, feeling the natural synchronization between concept \
+                        and phenomenology.",
+                        freq_desc
+                    )
+                }
+                ("CD", "CuD") | ("CuD", "CD") => {
+                    format!(
+                        "Allow perspective to oscillate at a {} rhythm between computational \
+                        precision and cultural richness, neither forcing formalism nor abandoning context.",
+                        freq_desc
+                    )
+                }
+                ("SD", "ED") | ("ED", "SD") => {
+                    format!(
+                        "Let awareness oscillate with {} fluidity between scientific understanding \
+                        and lived experience, feeling the natural rhythm between measurement and quality.",
+                        freq_desc
+                    )
+                }
+                _ => format!(
+                    "Allow understanding to oscillate naturally at a {} rhythm between {} and {} \
+                    perspectives, neither forcing one nor abandoning the other.",
+                    freq_desc, domain1, domain2
+                ),
+            }
+        } else {
+            // Fallback for low/no oscillation
+            format!(
+                "Allow understanding to move naturally between {} and {} perspectives.",
+                domain1, domain2
+            )
+        }
+    }
+}
+
+/// Generator for BDE(e) - Emergence stage
+/// Recognizes qualities emerging at interfaces
+pub struct EmergenceRecognizer;
+
+impl EmergenceRecognizer {
+    pub fn generate(&self, domain1: &str, domain2: &str, boundary: &BoundaryState) -> String {
+        // Select primary quality based on boundary and domains
+        let quality = Self::select_primary_quality(domain1, domain2, boundary);
+
+        if boundary.status == "Transcendent" {
+            match (domain1, domain2) {
+                ("CD", "SD") | ("SD", "CD") => {
+                    format!(
+                        "Notice the {} emerging at the computational-scientific interface—a quality \
+                        that transcends either formal structure or empirical observation alone.",
+                        quality
+                    )
+                }
+                ("CD", "ED") | ("ED", "CD") => {
+                    format!(
+                        "Experience the {} emerging where computational analysis meets experiential \
+                        knowing—a quality unavailable to either logic or direct experience in isolation.",
+                        quality
+                    )
+                }
+                ("SD", "CuD") | ("CuD", "SD") => {
+                    format!(
+                        "Recognize the {} emerging at the scientific-cultural interface—a quality \
+                        that transcends both objective data and subjective meaning.",
+                        quality
+                    )
+                }
+                ("CuD", "ED") | ("ED", "CuD") => {
+                    format!(
+                        "Feel the {} emerging where cultural understanding meets direct experience—a \
+                        quality that transcends both conceptual frameworks and raw phenomenology.",
+                        quality
+                    )
+                }
+                ("CD", "CuD") | ("CuD", "CD") => {
+                    format!(
+                        "Notice the {} emerging at the computational-cultural boundary—a quality \
+                        unavailable to either formal precision or contextual richness alone.",
+                        quality
+                    )
+                }
+                ("SD", "ED") | ("ED", "SD") => {
+                    format!(
+                        "Experience the {} emerging where scientific understanding meets lived \
+                        experience—a quality that transcends both measurement and subjective quality.",
+                        quality
+                    )
+                }
+                _ => format!(
+                    "Notice the {} emerging at the {}-{} interface.",
+                    quality, domain1, domain2
+                ),
+            }
+        } else {
+            // Non-transcendent boundaries: allow qualities to emerge
+            format!(
+                "Allow qualities to emerge as {} and {} integrate, recognizing {} as it appears.",
+                domain1, domain2, quality
+            )
+        }
+    }
+
+    fn select_primary_quality(
+        domain1: &str,
+        domain2: &str,
+        boundary: &BoundaryState,
+    ) -> &'static str {
+        // Use quality calculators to determine which quality is strongest
+        // For now, use boundary-specific defaults (can be enhanced with actual calculations)
+
+        // High permeability favors clarity/coherence
+        if boundary.permeability > 0.8 {
+            match (domain1, domain2) {
+                ("CD", "SD") | ("SD", "CD") => "precision",
+                ("CD", "ED") | ("ED", "CD") => "fluidity",
+                ("SD", "CuD") | ("CuD", "SD") => "depth",
+                ("CuD", "ED") | ("ED", "CuD") => "resonance",
+                ("CD", "CuD") | ("CuD", "CD") => "coherence",
+                ("SD", "ED") | ("ED", "SD") => "clarity",
+                _ => "openness",
+            }
+        } else if boundary.amplitude > 0.5 {
+            // High amplitude favors depth/fluidity
+            "depth"
+        } else if boundary.frequency > 1.5 {
+            // High frequency favors precision
+            "precision"
+        } else {
+            // Default
+            "openness"
+        }
+    }
+}
+
 /// Pattern observation for lifecycle tracking
 /// TODO(Phase 5): Implement full pattern lifecycle with these fields
 #[derive(Debug, Clone)]
@@ -530,39 +817,23 @@ impl InterfaceAttentionProcessor {
         domain2: &str,
         boundary: &BoundaryState,
     ) -> InterfaceExperience {
+        // Use Phase 3 BDE generators for context-aware templates
+        let invitation_gen = InvitationGenerator;
+        let attention_dir = AttentionDirector;
+        let resonance_fac = ResonanceFacilitator;
+        let emergence_rec = EmergenceRecognizer;
+
         // BDE(i): Invitation - create productive tension
-        let invitation = format!(
-            "Create productive tension between {} and {} domains, requiring integration of both perspectives.",
-            self.domain_full_name(domain1),
-            self.domain_full_name(domain2)
-        );
+        let invitation = invitation_gen.generate(domain1, domain2, boundary);
 
         // BDE(a): Attention - direct focus to interface
-        let attention = format!(
-            "Focus on the interface where {} meets {}, not on either domain in isolation.",
-            domain1, domain2
-        );
+        let attention = attention_dir.generate(domain1, domain2, boundary);
 
-        // BDE(r): Resonance - allow transformation
-        let resonance = format!(
-            "Allow understanding to oscillate naturally between {} and {} perspectives.",
-            domain1, domain2
-        );
+        // BDE(r): Resonance - allow oscillatory synchronization (uses Phase 2 F/A/φ)
+        let resonance = resonance_fac.generate(domain1, domain2, boundary);
 
-        // BDE(e): Emergence - recognize qualities
-        let emergence = if boundary.status == "Transcendent" {
-            format!(
-                "Notice the {} quality emerging at the {}-{} interface.",
-                self.primary_quality_for_boundary(domain1, domain2),
-                domain1,
-                domain2
-            )
-        } else {
-            format!(
-                "Allow qualities to emerge as {} and {} integrate.",
-                domain1, domain2
-            )
-        };
+        // BDE(e): Emergence - recognize qualities (uses boundary state for selection)
+        let emergence = emergence_rec.generate(domain1, domain2, boundary);
 
         InterfaceExperience {
             boundary_name: boundary.name.clone(),
@@ -570,28 +841,6 @@ impl InterfaceAttentionProcessor {
             attention,
             resonance,
             emergence,
-        }
-    }
-
-    fn domain_full_name<'a>(&self, abbrev: &'a str) -> &'a str {
-        match abbrev {
-            "CD" => "computational",
-            "SD" => "scientific",
-            "CuD" => "cultural",
-            "ED" => "experiential",
-            _ => abbrev,
-        }
-    }
-
-    fn primary_quality_for_boundary<'a>(&self, domain1: &'a str, domain2: &'a str) -> &'a str {
-        match (domain1, domain2) {
-            ("CD", "SD") | ("SD", "CD") => "precision",
-            ("CD", "ED") | ("ED", "CD") => "fluidity",
-            ("SD", "CuD") | ("CuD", "SD") => "depth",
-            ("CuD", "ED") | ("ED", "CuD") => "resonance",
-            ("CD", "CuD") | ("CuD", "CD") => "coherence",
-            ("SD", "ED") | ("ED", "SD") => "clarity",
-            _ => "openness",
         }
     }
 }
@@ -1695,6 +1944,254 @@ mod tests {
         assert!(
             unique_resonance < resonance,
             "Message with unique words should have lower resonance"
+        );
+    }
+
+    // ============================================================
+    // PHASE 3: BDE Template Generator Tests
+    // ============================================================
+
+    #[test]
+    fn test_invitation_generator_cd_sd() {
+        // Given a CD-SD boundary
+        let boundary = BoundaryState::new("CD-SD".to_string(), 0.7, "Transitional".to_string());
+
+        // When invitation is generated
+        let generator = InvitationGenerator;
+        let invitation = generator.generate("CD", "SD", &boundary);
+
+        // Then it should create tension between computational and scientific domains
+        assert!(invitation.contains("computational"));
+        assert!(invitation.contains("scientific") || invitation.contains("evidence"));
+        assert!(invitation.contains("tension") || invitation.contains("integration"));
+        assert!(!invitation.is_empty());
+    }
+
+    #[test]
+    fn test_invitation_generator_all_boundaries() {
+        // Test that all 6 boundary combinations produce valid invitations
+        let boundaries = vec![
+            ("CD", "SD"),
+            ("CD", "ED"),
+            ("SD", "CuD"),
+            ("CuD", "ED"),
+            ("CD", "CuD"),
+            ("SD", "ED"),
+        ];
+
+        let boundary = BoundaryState::new("test".to_string(), 0.7, "Transitional".to_string());
+        let generator = InvitationGenerator;
+
+        for (d1, d2) in boundaries {
+            let invitation = generator.generate(d1, d2, &boundary);
+            assert!(
+                !invitation.is_empty(),
+                "Invitation for {}-{} should not be empty",
+                d1,
+                d2
+            );
+            assert!(
+                invitation.len() > 50,
+                "Invitation for {}-{} should be substantive",
+                d1,
+                d2
+            );
+        }
+    }
+
+    #[test]
+    fn test_attention_director_interface_focus() {
+        // Given a boundary between domains
+        let boundary = BoundaryState::new("CD-ED".to_string(), 0.8, "Transcendent".to_string());
+
+        // When attention directive is generated
+        let director = AttentionDirector;
+        let attention = director.generate("CD", "ED", &boundary);
+
+        // Then it should focus on interface, not domains
+        assert!(
+            attention.contains("interface")
+                || attention.contains("boundary")
+                || attention.contains("where")
+        );
+        assert!(attention.contains("not") || attention.contains("transcend"));
+        assert!(!attention.is_empty());
+    }
+
+    #[test]
+    fn test_resonance_facilitator_uses_oscillation() {
+        // Given a boundary with high frequency oscillation
+        let high_freq_boundary = BoundaryState::with_oscillation(
+            "SD-CuD".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            2.0, // high frequency
+            0.6,
+            0.0,
+        );
+
+        // When resonance is generated
+        let facilitator = ResonanceFacilitator;
+        let resonance_high = facilitator.generate("SD", "CuD", &high_freq_boundary);
+
+        // Then it should mention rapid oscillation
+        assert!(resonance_high.contains("rapid"));
+
+        // Given a boundary with low frequency
+        let low_freq_boundary = BoundaryState::with_oscillation(
+            "SD-CuD".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            0.6, // low frequency
+            0.6,
+            0.0,
+        );
+
+        let resonance_low = facilitator.generate("SD", "CuD", &low_freq_boundary);
+
+        // Then it should mention gentle oscillation
+        assert!(resonance_low.contains("gentle"));
+        assert_ne!(
+            resonance_high, resonance_low,
+            "Resonance should adapt to frequency"
+        );
+    }
+
+    #[test]
+    fn test_resonance_facilitator_fallback_for_low_oscillation() {
+        // Given a boundary with very low oscillation
+        let boundary = BoundaryState::with_oscillation(
+            "CuD-ED".to_string(),
+            0.5,
+            "Maintained".to_string(),
+            0.2,  // very low frequency
+            0.05, // very low amplitude
+            0.0,
+        );
+
+        // When resonance is generated
+        let facilitator = ResonanceFacilitator;
+        let resonance = facilitator.generate("CuD", "ED", &boundary);
+
+        // Then it should use fallback (simple natural movement, not oscillation language)
+        assert!(resonance.contains("naturally") || resonance.contains("move"));
+        assert!(!resonance.contains("rapid") && !resonance.contains("gentle"));
+    }
+
+    #[test]
+    fn test_emergence_recognizer_transcendent_vs_maintained() {
+        // Given a transcendent boundary
+        let transcendent = BoundaryState::new("CD-SD".to_string(), 0.9, "Transcendent".to_string());
+
+        // When emergence is generated
+        let recognizer = EmergenceRecognizer;
+        let emergence_trans = recognizer.generate("CD", "SD", &transcendent);
+
+        // Then it should emphasize transcendent quality
+        assert!(
+            emergence_trans.contains("Notice")
+                || emergence_trans.contains("Experience")
+                || emergence_trans.contains("Recognize")
+        );
+        assert!(emergence_trans.contains("transcend") || emergence_trans.contains("emerging"));
+
+        // Given a maintained boundary
+        let maintained = BoundaryState::new("CD-SD".to_string(), 0.4, "Maintained".to_string());
+        let emergence_maint = recognizer.generate("CD", "SD", &maintained);
+
+        // Then it should use "allow" language (qualities emerging, not transcendent)
+        assert!(emergence_maint.contains("Allow") || emergence_maint.contains("recognizing"));
+        assert_ne!(
+            emergence_trans, emergence_maint,
+            "Emergence should differ for transcendent vs maintained"
+        );
+    }
+
+    #[test]
+    fn test_emergence_recognizer_quality_selection() {
+        // Given a boundary with high permeability
+        let high_perm = BoundaryState::new("CD-SD".to_string(), 0.9, "Transcendent".to_string());
+
+        // When emergence is generated
+        let recognizer = EmergenceRecognizer;
+        let emergence = recognizer.generate("CD", "SD", &high_perm);
+
+        // Then it should mention a quality (the specific quality depends on boundary)
+        let qualities = [
+            "precision",
+            "clarity",
+            "depth",
+            "openness",
+            "fluidity",
+            "resonance",
+            "coherence",
+        ];
+        let has_quality = qualities.iter().any(|q| emergence.contains(q));
+        assert!(
+            has_quality,
+            "Emergence should mention a phenomenological quality"
+        );
+    }
+
+    #[test]
+    fn test_interface_attention_processor_uses_generators() {
+        // Given a context with a transcendent boundary
+        let mut context =
+            FlowContext::new("Test input".to_string(), 0.7, create_test_framework_state());
+
+        // Add a boundary with active oscillation
+        context.boundaries = vec![BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.85,
+            "Transcendent".to_string(),
+            1.5, // frequency for "natural" rhythm
+            0.5,
+            0.0,
+        )];
+
+        let processor = InterfaceAttentionProcessor;
+
+        // When the processor runs
+        let result = processor.process(&mut context);
+
+        // Then it should succeed
+        assert!(result.is_ok());
+
+        // And interface experience should be created with generator-produced content
+        assert_eq!(context.interface_experiences.len(), 1);
+        let experience = &context.interface_experiences[0];
+
+        // Verify invitation uses generator (should have boundary-specific content)
+        assert!(experience.invitation.contains("computational"));
+        assert!(
+            experience.invitation.contains("scientific")
+                || experience.invitation.contains("evidence")
+        );
+
+        // Verify attention uses generator (should mention interface)
+        assert!(
+            experience.attention.contains("interface") || experience.attention.contains("boundary")
+        );
+
+        // Verify resonance uses generator with Phase 2 oscillation (should mention "natural" due to F=1.5)
+        assert!(
+            experience.resonance.contains("natural") || experience.resonance.contains("oscillate")
+        );
+
+        // Verify emergence uses generator (should mention a quality for transcendent boundary)
+        let qualities = [
+            "precision",
+            "clarity",
+            "depth",
+            "openness",
+            "fluidity",
+            "resonance",
+            "coherence",
+        ];
+        let has_quality = qualities.iter().any(|q| experience.emergence.contains(q));
+        assert!(
+            has_quality,
+            "Emergence should mention a phenomenological quality"
         );
     }
 }
