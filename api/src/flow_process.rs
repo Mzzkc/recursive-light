@@ -672,6 +672,74 @@ impl EmergenceRecognizer {
     }
 }
 
+/// Boundary activation strength based on domain activations
+/// Tracks how "active" a boundary is based on its connecting domains
+#[derive(Debug, Clone)]
+pub struct BoundaryActivation {
+    pub boundary_name: String,
+    pub activation_strength: f64,      // Product of domain activations
+    pub is_resonating: bool,           // Whether boundary resonates with others
+    pub resonance_cluster_size: usize, // How many boundaries it resonates with
+}
+
+impl BoundaryActivation {
+    pub fn calculate(
+        boundary: &BoundaryState,
+        domains: &HashMap<String, DomainActivation>,
+        all_boundaries: &[BoundaryState],
+    ) -> Self {
+        // Extract domain names from boundary (e.g., "CD-SD" -> ["CD", "SD"])
+        let domain_names: Vec<&str> = boundary.name.split('-').collect();
+
+        // Calculate activation strength from domain activations
+        let activation_strength = if domain_names.len() == 2 {
+            let d1_activation = domains
+                .get(domain_names[0])
+                .map(|d| d.activation)
+                .unwrap_or(0.5);
+            let d2_activation = domains
+                .get(domain_names[1])
+                .map(|d| d.activation)
+                .unwrap_or(0.5);
+
+            // Product of domain activations (both must be active for strong boundary activation)
+            d1_activation * d2_activation
+        } else {
+            0.0
+        };
+
+        // Count resonating boundaries
+        let resonance_cluster_size = all_boundaries
+            .iter()
+            .filter(|b| b.name != boundary.name && boundary.resonates_with(b))
+            .count();
+
+        let is_resonating = resonance_cluster_size > 0;
+
+        BoundaryActivation {
+            boundary_name: boundary.name.clone(),
+            activation_strength,
+            is_resonating,
+            resonance_cluster_size,
+        }
+    }
+
+    /// Calculate interface priority score for selection
+    /// Combines activation strength, permeability, and resonance
+    pub fn priority_score(&self, boundary: &BoundaryState) -> f64 {
+        let activation_factor = self.activation_strength;
+        let permeability_factor = boundary.permeability;
+        let resonance_factor = if self.is_resonating {
+            1.0 + (self.resonance_cluster_size as f64 * 0.2)
+        } else {
+            1.0
+        };
+
+        // Weighted combination: activation (40%), permeability (30%), resonance (30%)
+        (activation_factor * 0.4 + permeability_factor * 0.3) * resonance_factor
+    }
+}
+
 /// Pattern observation for lifecycle tracking
 /// TODO(Phase 5): Implement full pattern lifecycle with these fields
 #[derive(Debug, Clone)]
@@ -823,15 +891,56 @@ impl StageProcessor for InterfaceAttentionProcessor {
     }
 
     fn process(&self, context: &mut FlowContext) -> Result<(), FlowError> {
-        // Find boundaries with high permeability (transcendent or transitional)
-        let relevant_boundaries: Vec<&BoundaryState> = context
+        // Calculate activation strength for all boundaries
+        let mut boundary_activations: Vec<BoundaryActivation> = context
             .boundaries
             .iter()
-            .filter(|b| b.permeability > 0.6)
+            .map(|b| BoundaryActivation::calculate(b, &context.domains, &context.boundaries))
             .collect();
 
-        // Create interface experiences for relevant boundaries
-        for boundary in relevant_boundaries {
+        // Sort by priority score (highest first)
+        boundary_activations.sort_by(|a, b| {
+            let a_boundary = context
+                .boundaries
+                .iter()
+                .find(|x| x.name == a.boundary_name)
+                .unwrap();
+            let b_boundary = context
+                .boundaries
+                .iter()
+                .find(|x| x.name == b.boundary_name)
+                .unwrap();
+
+            let a_score = a.priority_score(a_boundary);
+            let b_score = b.priority_score(b_boundary);
+
+            b_score
+                .partial_cmp(&a_score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        // Select top boundaries (prioritize high activation + permeability + resonance)
+        let selected_boundaries: Vec<&BoundaryActivation> = boundary_activations
+            .iter()
+            .filter(|ba| {
+                let boundary = context
+                    .boundaries
+                    .iter()
+                    .find(|b| b.name == ba.boundary_name)
+                    .unwrap();
+                // Select if: high priority score OR high permeability (minimum threshold)
+                ba.priority_score(boundary) > 0.3 || boundary.permeability > 0.7
+            })
+            .take(6) // Limit to top 6 interfaces to avoid overwhelming prompt
+            .collect();
+
+        // Create interface experiences for selected boundaries
+        for ba in selected_boundaries {
+            let boundary = context
+                .boundaries
+                .iter()
+                .find(|b| b.name == ba.boundary_name)
+                .unwrap();
             let domains: Vec<&str> = boundary.name.split('-').collect();
             if domains.len() == 2 {
                 let experience = self.create_interface_experience(
@@ -2432,6 +2541,206 @@ mod tests {
             "Complex message should have higher precision. Got simple: {}, complex: {}",
             quality_simple.precision,
             quality_complex.precision
+        );
+    }
+
+    #[test]
+    fn test_boundary_activation_calculation() {
+        // Given two domains with different activation levels
+        let mut domains = HashMap::new();
+        domains.insert("CD".to_string(), DomainActivation { activation: 0.8 });
+        domains.insert("SD".to_string(), DomainActivation { activation: 0.6 });
+        domains.insert("CuD".to_string(), DomainActivation { activation: 0.3 });
+
+        let cd_sd = BoundaryState::new("CD-SD".to_string(), 0.7, "Transitional".to_string());
+        let cd_cud = BoundaryState::new("CD-CuD".to_string(), 0.5, "Maintained".to_string());
+
+        let all_boundaries = vec![cd_sd.clone(), cd_cud.clone()];
+
+        // When calculating boundary activation
+        let activation_cd_sd = BoundaryActivation::calculate(&cd_sd, &domains, &all_boundaries);
+        let activation_cd_cud = BoundaryActivation::calculate(&cd_cud, &domains, &all_boundaries);
+
+        // Then activation strength should be product of domain activations
+        assert!(
+            (activation_cd_sd.activation_strength - (0.8 * 0.6)).abs() < 0.01,
+            "CD-SD activation should be 0.8 * 0.6 = 0.48. Got: {}",
+            activation_cd_sd.activation_strength
+        );
+
+        assert!(
+            (activation_cd_cud.activation_strength - (0.8 * 0.3)).abs() < 0.01,
+            "CD-CuD activation should be 0.8 * 0.3 = 0.24. Got: {}",
+            activation_cd_cud.activation_strength
+        );
+
+        // CD-SD should have higher activation than CD-CuD
+        assert!(
+            activation_cd_sd.activation_strength > activation_cd_cud.activation_strength,
+            "Higher domain activations should produce higher boundary activation"
+        );
+    }
+
+    #[test]
+    fn test_boundary_activation_with_resonance() {
+        // Given three boundaries with aligned phases (resonating)
+        let mut domains = HashMap::new();
+        domains.insert("CD".to_string(), DomainActivation { activation: 0.7 });
+        domains.insert("SD".to_string(), DomainActivation { activation: 0.7 });
+        domains.insert("CuD".to_string(), DomainActivation { activation: 0.6 });
+
+        let mut cd_sd = BoundaryState::new("CD-SD".to_string(), 0.8, "Transcendent".to_string());
+        cd_sd.frequency = 1.2;
+        cd_sd.phase = 0.5;
+
+        let mut sd_cud = BoundaryState::new("SD-CuD".to_string(), 0.7, "Transitional".to_string());
+        sd_cud.frequency = 1.1; // Similar frequency
+        sd_cud.phase = 0.6; // Similar phase (within π/4)
+
+        let mut cd_cud = BoundaryState::new("CD-CuD".to_string(), 0.6, "Maintained".to_string());
+        cd_cud.frequency = 1.15;
+        cd_cud.phase = 0.55;
+
+        let all_boundaries = vec![cd_sd.clone(), sd_cud.clone(), cd_cud.clone()];
+
+        // When calculating boundary activation for resonating boundaries
+        let activation = BoundaryActivation::calculate(&cd_sd, &domains, &all_boundaries);
+
+        // Then should detect resonance with other boundaries
+        assert!(
+            activation.is_resonating,
+            "CD-SD should resonate with SD-CuD and CD-CuD"
+        );
+
+        assert!(
+            activation.resonance_cluster_size >= 2,
+            "CD-SD should resonate with at least 2 boundaries. Got: {}",
+            activation.resonance_cluster_size
+        );
+    }
+
+    #[test]
+    fn test_priority_score_calculation() {
+        // Given a boundary with high activation, permeability, and resonance
+        let mut domains = HashMap::new();
+        domains.insert("CD".to_string(), DomainActivation { activation: 0.9 });
+        domains.insert("SD".to_string(), DomainActivation { activation: 0.8 });
+
+        let mut high_priority =
+            BoundaryState::new("CD-SD".to_string(), 0.9, "Transcendent".to_string());
+        high_priority.frequency = 1.2;
+        high_priority.phase = 0.5;
+
+        let mut resonating =
+            BoundaryState::new("SD-CuD".to_string(), 0.7, "Transitional".to_string());
+        resonating.frequency = 1.1;
+        resonating.phase = 0.6;
+
+        let all_boundaries = vec![high_priority.clone(), resonating.clone()];
+
+        let activation_high =
+            BoundaryActivation::calculate(&high_priority, &domains, &all_boundaries);
+
+        // And a boundary with low activation, permeability, no resonance
+        let mut low_priority =
+            BoundaryState::new("CuD-ED".to_string(), 0.3, "Maintained".to_string());
+        low_priority.frequency = 0.5;
+        low_priority.phase = 2.0;
+
+        domains.insert("CuD".to_string(), DomainActivation { activation: 0.3 });
+        domains.insert("ED".to_string(), DomainActivation { activation: 0.4 });
+
+        let all_boundaries_with_low = vec![
+            high_priority.clone(),
+            resonating.clone(),
+            low_priority.clone(),
+        ];
+        let activation_low =
+            BoundaryActivation::calculate(&low_priority, &domains, &all_boundaries_with_low);
+
+        // When calculating priority scores
+        let score_high = activation_high.priority_score(&high_priority);
+        let score_low = activation_low.priority_score(&low_priority);
+
+        // Then high priority boundary should have much higher score
+        assert!(
+            score_high > score_low,
+            "High priority boundary should have higher score. Got high: {}, low: {}",
+            score_high,
+            score_low
+        );
+
+        // High priority score should reflect resonance boost (>1.0 multiplier from resonance)
+        assert!(
+            score_high > 0.5,
+            "High priority score should be substantial. Got: {}",
+            score_high
+        );
+    }
+
+    #[test]
+    fn test_interface_attention_processor_prioritizes_active_boundaries() {
+        // Given boundaries with varying activation levels
+        let mut context =
+            FlowContext::new("Test input".to_string(), 0.7, create_test_framework_state());
+
+        // Set up domain activations (CD and SD highly active, CuD and ED less active)
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.9 });
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.8 });
+        context
+            .domains
+            .insert("CuD".to_string(), DomainActivation { activation: 0.3 });
+        context
+            .domains
+            .insert("ED".to_string(), DomainActivation { activation: 0.3 });
+
+        // Create boundaries
+        let mut cd_sd = BoundaryState::new("CD-SD".to_string(), 0.8, "Transcendent".to_string());
+        cd_sd.frequency = 1.2;
+        cd_sd.phase = 0.5;
+
+        let mut sd_cud = BoundaryState::new("SD-CuD".to_string(), 0.7, "Transitional".to_string());
+        sd_cud.frequency = 1.1;
+        sd_cud.phase = 0.6;
+
+        let cud_ed = BoundaryState::new("CuD-ED".to_string(), 0.4, "Maintained".to_string());
+
+        context.boundaries = vec![cd_sd, sd_cud, cud_ed];
+
+        // When processing interface attention
+        let processor = InterfaceAttentionProcessor;
+        processor.process(&mut context).unwrap();
+
+        // Then should create interface experiences
+        assert!(
+            !context.interface_experiences.is_empty(),
+            "Should create interface experiences for active boundaries"
+        );
+
+        // CD-SD should be prioritized (highest activation product: 0.9 * 0.8 = 0.72)
+        let cd_sd_found = context
+            .interface_experiences
+            .iter()
+            .any(|exp| exp.boundary_name == "CD-SD");
+
+        assert!(
+            cd_sd_found,
+            "CD-SD (highest activation) should be selected for interface experience"
+        );
+
+        // Interface experiences should use multi-boundary resonance (from Day 5)
+        let has_resonance_text = context
+            .interface_experiences
+            .iter()
+            .any(|exp| !exp.resonance.is_empty());
+
+        assert!(
+            has_resonance_text,
+            "Interface experiences should have resonance text"
         );
     }
 }
