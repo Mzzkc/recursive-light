@@ -540,7 +540,6 @@ impl ResonanceFacilitator {
     }
 
     /// Generate enhanced resonance description using multi-boundary resonance detection
-    #[allow(dead_code)] // Used in tests
     pub fn generate_with_context(
         &self,
         domain1: &str,
@@ -835,7 +834,12 @@ impl StageProcessor for InterfaceAttentionProcessor {
         for boundary in relevant_boundaries {
             let domains: Vec<&str> = boundary.name.split('-').collect();
             if domains.len() == 2 {
-                let experience = self.create_interface_experience(domains[0], domains[1], boundary);
+                let experience = self.create_interface_experience(
+                    domains[0],
+                    domains[1],
+                    boundary,
+                    &context.boundaries,
+                );
                 context.interface_experiences.push(experience);
             }
         }
@@ -850,6 +854,7 @@ impl InterfaceAttentionProcessor {
         domain1: &str,
         domain2: &str,
         boundary: &BoundaryState,
+        all_boundaries: &[BoundaryState],
     ) -> InterfaceExperience {
         // Use Phase 3 BDE generators for context-aware templates
         let invitation_gen = InvitationGenerator;
@@ -863,8 +868,9 @@ impl InterfaceAttentionProcessor {
         // BDE(a): Attention - direct focus to interface
         let attention = attention_dir.generate(domain1, domain2, boundary);
 
-        // BDE(r): Resonance - allow oscillatory synchronization (uses Phase 2 F/A/φ)
-        let resonance = resonance_fac.generate(domain1, domain2, boundary);
+        // BDE(r): Resonance - allow oscillatory synchronization with multi-boundary detection
+        let resonance =
+            resonance_fac.generate_with_context(domain1, domain2, boundary, all_boundaries);
 
         // BDE(e): Emergence - recognize qualities (uses boundary state for selection)
         let emergence = emergence_rec.generate(domain1, domain2, boundary);
