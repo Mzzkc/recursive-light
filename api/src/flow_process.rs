@@ -538,6 +538,40 @@ impl ResonanceFacilitator {
             )
         }
     }
+
+    /// Generate enhanced resonance description using multi-boundary resonance detection
+    #[allow(dead_code)] // Used in tests
+    pub fn generate_with_context(
+        &self,
+        domain1: &str,
+        domain2: &str,
+        boundary: &BoundaryState,
+        all_boundaries: &[BoundaryState],
+    ) -> String {
+        // Find resonant boundaries (boundaries that resonate with current boundary)
+        let resonant_boundaries: Vec<&BoundaryState> = all_boundaries
+            .iter()
+            .filter(|b| b.name != boundary.name && boundary.resonates_with(b))
+            .collect();
+
+        if !resonant_boundaries.is_empty() {
+            // Multi-boundary resonance detected
+            let boundary_names: Vec<&str> = resonant_boundaries
+                .iter()
+                .map(|b| b.name.as_str())
+                .collect();
+
+            format!(
+                "{} Notice how this resonates with synchronization across {} boundaries, \
+                creating harmonic patterns throughout the system.",
+                self.generate(domain1, domain2, boundary),
+                boundary_names.join(", ")
+            )
+        } else {
+            // Single boundary resonance
+            self.generate(domain1, domain2, boundary)
+        }
+    }
 }
 
 /// Generator for BDE(e) - Emergence stage
@@ -871,19 +905,28 @@ impl QualityEmergenceProcessor {
     fn calculate_qualities(
         &self,
         boundary: &BoundaryState,
-        _context: &FlowContext,
+        context: &FlowContext,
     ) -> PhenomenologicalQuality {
-        let permeability = boundary.permeability;
+        // Use Phase 3 Days 1-2 quality calculators for context-aware quality calculation
+        let message = &context.user_input;
+
+        let clarity_calc = ClarityCalculator;
+        let depth_calc = DepthCalculator;
+        let openness_calc = OpennessCalculator;
+        let precision_calc = PrecisionCalculator;
+        let fluidity_calc = FluidityCalculator;
+        let resonance_calc = ResonanceCalculator;
+        let coherence_calc = CoherenceCalculator;
 
         PhenomenologicalQuality {
             boundary_name: boundary.name.clone(),
-            clarity: 0.6 * permeability + 0.4 * 0.8, // Higher permeability = more clarity
-            depth: 0.7 * permeability + 0.3 * 0.75,  // Depth emerges with integration
-            openness: permeability,                  // Directly related to permeability
-            precision: 0.8 * (1.0 - permeability) + 0.2 * permeability, // Balance of separation and integration
-            fluidity: 0.6 * permeability + 0.4 * 0.85, // Fluid transformation at interfaces
-            resonance: 0.5 + 0.5 * permeability,       // Resonance increases with integration
-            coherence: 0.7 * permeability + 0.3 * 0.9, // Coherent integration
+            clarity: clarity_calc.calculate(boundary, message),
+            depth: depth_calc.calculate(boundary, message),
+            openness: openness_calc.calculate(boundary, message),
+            precision: precision_calc.calculate(boundary, message),
+            fluidity: fluidity_calc.calculate(boundary, message),
+            resonance: resonance_calc.calculate(boundary, message),
+            coherence: coherence_calc.calculate(boundary, message),
         }
     }
 }
@@ -2192,6 +2235,197 @@ mod tests {
         assert!(
             has_quality,
             "Emergence should mention a phenomenological quality"
+        );
+    }
+
+    // ============================================================
+    // PHASE 3 DAY 5: Resonance Integration Tests
+    // ============================================================
+
+    #[test]
+    fn test_resonance_facilitator_multi_boundary_detection() {
+        // Given multiple boundaries with resonant frequencies
+        let boundary1 = BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            1.0, // 1.0 Hz
+            0.5,
+            0.0,
+        );
+
+        let boundary2 = BoundaryState::with_oscillation(
+            "SD-CuD".to_string(),
+            0.6,
+            "Transitional".to_string(),
+            1.05, // 1.05 Hz - resonates with boundary1
+            0.5,
+            0.1,
+        );
+
+        let boundary3 = BoundaryState::with_oscillation(
+            "CuD-ED".to_string(),
+            0.5,
+            "Maintained".to_string(),
+            2.5, // 2.5 Hz - different frequency, won't resonate
+            0.3,
+            0.0,
+        );
+
+        let all_boundaries = vec![boundary1.clone(), boundary2.clone(), boundary3.clone()];
+
+        // When resonance is generated with context
+        let facilitator = ResonanceFacilitator;
+        let resonance = facilitator.generate_with_context("CD", "SD", &boundary1, &all_boundaries);
+
+        // Then it should mention multi-boundary synchronization
+        assert!(
+            resonance.contains("resonates") || resonance.contains("synchronization"),
+            "Should mention resonance/synchronization"
+        );
+        assert!(
+            resonance.contains("SD-CuD") || resonance.contains("boundaries"),
+            "Should mention resonant boundary or boundaries"
+        );
+    }
+
+    #[test]
+    fn test_resonance_facilitator_single_boundary_fallback() {
+        // Given a boundary with no resonant partners
+        let boundary1 = BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.7,
+            "Transitional".to_string(),
+            1.0, // 1.0 Hz
+            0.5,
+            0.0,
+        );
+
+        let boundary2 = BoundaryState::with_oscillation(
+            "SD-CuD".to_string(),
+            0.6,
+            "Maintained".to_string(),
+            3.0, // 3.0 Hz - very different, won't resonate
+            0.3,
+            2.0, // opposite phase
+        );
+
+        let all_boundaries = vec![boundary1.clone(), boundary2.clone()];
+
+        // When resonance is generated with context
+        let facilitator = ResonanceFacilitator;
+        let resonance = facilitator.generate_with_context("CD", "SD", &boundary1, &all_boundaries);
+
+        // Then it should fall back to single-boundary resonance (no multi-boundary mention)
+        assert!(!resonance.contains("synchronization across"));
+        assert!(resonance.contains("oscillate") || resonance.contains("natural"));
+    }
+
+    #[test]
+    fn test_quality_emergence_processor_uses_calculators() {
+        // Given a context with a transcendent boundary and a complex message
+        let mut context = FlowContext::new(
+            "This message explores multiple interconnected concepts across different domains."
+                .to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        // Add a transcendent boundary with active oscillation
+        context.boundaries = vec![BoundaryState::with_oscillation(
+            "CD-SD".to_string(),
+            0.9, // high permeability (transcendent)
+            "Transcendent".to_string(),
+            1.5, // frequency
+            0.6, // amplitude
+            0.0,
+        )];
+
+        let processor = QualityEmergenceProcessor;
+
+        // When the processor runs
+        let result = processor.process(&mut context);
+
+        // Then it should succeed
+        assert!(result.is_ok());
+
+        // And emergent qualities should be calculated
+        assert_eq!(context.emergent_qualities.len(), 1);
+        let quality = &context.emergent_qualities[0];
+
+        // Verify all quality values are in valid range [0.0, 1.0]
+        assert!(quality.clarity >= 0.0 && quality.clarity <= 1.0);
+        assert!(quality.depth >= 0.0 && quality.depth <= 1.0);
+        assert!(quality.openness >= 0.0 && quality.openness <= 1.0);
+        assert!(quality.precision >= 0.0 && quality.precision <= 1.0);
+        assert!(quality.fluidity >= 0.0 && quality.fluidity <= 1.0);
+        assert!(quality.resonance >= 0.0 && quality.resonance <= 1.0);
+        assert!(quality.coherence >= 0.0 && quality.coherence <= 1.0);
+
+        // Verify qualities are context-aware (not hard-coded)
+        // High permeability should produce relatively high clarity and coherence
+        assert!(
+            quality.clarity > 0.5,
+            "High permeability should produce good clarity"
+        );
+        assert!(
+            quality.coherence > 0.5,
+            "High permeability should produce good coherence"
+        );
+    }
+
+    #[test]
+    fn test_quality_emergence_processor_adapts_to_message() {
+        // Test that qualities change based on message content
+
+        // Given a short, simple message
+        let mut context_simple =
+            FlowContext::new("Hi".to_string(), 0.7, create_test_framework_state());
+
+        context_simple.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.9,
+            "Transcendent".to_string(),
+        )];
+
+        let processor = QualityEmergenceProcessor;
+        processor.process(&mut context_simple).unwrap();
+        let quality_simple = &context_simple.emergent_qualities[0];
+
+        // Given a complex, technical message
+        let mut context_complex = FlowContext::new(
+            "The algorithmic implementation utilizes sophisticated mathematical formulations \
+            to optimize computational efficiency while maintaining empirical validation across \
+            multiple scientific paradigms and cultural contexts."
+                .to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        context_complex.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.9,
+            "Transcendent".to_string(),
+        )];
+
+        processor.process(&mut context_complex).unwrap();
+        let quality_complex = &context_complex.emergent_qualities[0];
+
+        // Then qualities should differ based on message content
+        // Complex message should have higher depth (more concepts)
+        assert!(
+            quality_complex.depth > quality_simple.depth,
+            "Complex message should have higher depth. Got simple: {}, complex: {}",
+            quality_simple.depth,
+            quality_complex.depth
+        );
+
+        // Complex message should have higher precision (technical terminology)
+        assert!(
+            quality_complex.precision > quality_simple.precision,
+            "Complex message should have higher precision. Got simple: {}, complex: {}",
+            quality_simple.precision,
+            quality_complex.precision
         );
     }
 }
