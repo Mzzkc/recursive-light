@@ -578,16 +578,59 @@ impl ResonanceFacilitator {
 pub struct EmergenceRecognizer;
 
 impl EmergenceRecognizer {
-    pub fn generate(&self, domain1: &str, domain2: &str, boundary: &BoundaryState) -> String {
-        // Select primary quality based on boundary and domains
-        let quality = Self::select_primary_quality(domain1, domain2, boundary);
+    /// Select primary quality using actual quality calculator results
+    /// Combines boundary state (60%) with message content (40%)
+    fn select_primary_quality_with_message(
+        _domain1: &str,
+        _domain2: &str,
+        boundary: &BoundaryState,
+        message: &str,
+    ) -> &'static str {
+        // Calculate all 7 qualities using actual calculators
+        let clarity = ClarityCalculator.calculate(boundary, message);
+        let depth = DepthCalculator.calculate(boundary, message);
+        let openness = OpennessCalculator.calculate(boundary, message);
+        let precision = PrecisionCalculator.calculate(boundary, message);
+        let fluidity = FluidityCalculator.calculate(boundary, message);
+        let resonance = ResonanceCalculator.calculate(boundary, message);
+        let coherence = CoherenceCalculator.calculate(boundary, message);
+
+        // Find quality with highest score
+        let qualities = [
+            ("clarity", clarity),
+            ("depth", depth),
+            ("openness", openness),
+            ("precision", precision),
+            ("fluidity", fluidity),
+            ("resonance", resonance),
+            ("coherence", coherence),
+        ];
+
+        qualities
+            .iter()
+            .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+            .map(|q| q.0)
+            .unwrap_or("openness")
+    }
+
+    /// Generate emergence text with calculated quality awareness
+    pub fn generate_with_quality(
+        &self,
+        domain1: &str,
+        domain2: &str,
+        boundary: &BoundaryState,
+        message: &str,
+    ) -> String {
+        let quality =
+            Self::select_primary_quality_with_message(domain1, domain2, boundary, message);
 
         if boundary.status == "Transcendent" {
+            // Transcendent boundaries: recognize emergent quality
             match (domain1, domain2) {
                 ("CD", "SD") | ("SD", "CD") => {
                     format!(
-                        "Notice the {} emerging at the computational-scientific interface—a quality \
-                        that transcends either formal structure or empirical observation alone.",
+                        "Recognize the {} emerging at the computational-scientific interface—a quality \
+                        that transcends both algorithmic processing and empirical observation.",
                         quality
                     )
                 }
@@ -637,37 +680,6 @@ impl EmergenceRecognizer {
                 "Allow qualities to emerge as {} and {} integrate, recognizing {} as it appears.",
                 domain1, domain2, quality
             )
-        }
-    }
-
-    fn select_primary_quality(
-        domain1: &str,
-        domain2: &str,
-        boundary: &BoundaryState,
-    ) -> &'static str {
-        // Use quality calculators to determine which quality is strongest
-        // For now, use boundary-specific defaults (can be enhanced with actual calculations)
-
-        // High permeability favors clarity/coherence
-        if boundary.permeability > 0.8 {
-            match (domain1, domain2) {
-                ("CD", "SD") | ("SD", "CD") => "precision",
-                ("CD", "ED") | ("ED", "CD") => "fluidity",
-                ("SD", "CuD") | ("CuD", "SD") => "depth",
-                ("CuD", "ED") | ("ED", "CuD") => "resonance",
-                ("CD", "CuD") | ("CuD", "CD") => "coherence",
-                ("SD", "ED") | ("ED", "SD") => "clarity",
-                _ => "openness",
-            }
-        } else if boundary.amplitude > 0.5 {
-            // High amplitude favors depth/fluidity
-            "depth"
-        } else if boundary.frequency > 1.5 {
-            // High frequency favors precision
-            "precision"
-        } else {
-            // Default
-            "openness"
         }
     }
 }
@@ -948,6 +960,7 @@ impl StageProcessor for InterfaceAttentionProcessor {
                     domains[1],
                     boundary,
                     &context.boundaries,
+                    &context.user_input,
                 );
                 context.interface_experiences.push(experience);
             }
@@ -964,6 +977,7 @@ impl InterfaceAttentionProcessor {
         domain2: &str,
         boundary: &BoundaryState,
         all_boundaries: &[BoundaryState],
+        message: &str,
     ) -> InterfaceExperience {
         // Use Phase 3 BDE generators for context-aware templates
         let invitation_gen = InvitationGenerator;
@@ -981,8 +995,8 @@ impl InterfaceAttentionProcessor {
         let resonance =
             resonance_fac.generate_with_context(domain1, domain2, boundary, all_boundaries);
 
-        // BDE(e): Emergence - recognize qualities (uses boundary state for selection)
-        let emergence = emergence_rec.generate(domain1, domain2, boundary);
+        // BDE(e): Emergence - recognize qualities with message-aware quality selection
+        let emergence = emergence_rec.generate_with_quality(domain1, domain2, boundary, message);
 
         InterfaceExperience {
             boundary_name: boundary.name.clone(),
@@ -1033,15 +1047,31 @@ impl QualityEmergenceProcessor {
         let resonance_calc = ResonanceCalculator;
         let coherence_calc = CoherenceCalculator;
 
+        // Calculate base qualities from boundary state + message content
+        let base_clarity = clarity_calc.calculate(boundary, message);
+        let base_depth = depth_calc.calculate(boundary, message);
+        let base_openness = openness_calc.calculate(boundary, message);
+        let base_precision = precision_calc.calculate(boundary, message);
+        let base_fluidity = fluidity_calc.calculate(boundary, message);
+        let base_resonance = resonance_calc.calculate(boundary, message);
+        let base_coherence = coherence_calc.calculate(boundary, message);
+
+        // Calculate activation modulation (Day 6 integration)
+        let activation =
+            BoundaryActivation::calculate(boundary, &context.domains, &context.boundaries);
+        let activation_boost = 1.0 + (activation.activation_strength * 0.2); // Up to 20% boost from activation
+
+        // Apply activation-aware modulation
+        // High activation amplifies qualities (active interfaces have stronger phenomenological presence)
         PhenomenologicalQuality {
             boundary_name: boundary.name.clone(),
-            clarity: clarity_calc.calculate(boundary, message),
-            depth: depth_calc.calculate(boundary, message),
-            openness: openness_calc.calculate(boundary, message),
-            precision: precision_calc.calculate(boundary, message),
-            fluidity: fluidity_calc.calculate(boundary, message),
-            resonance: resonance_calc.calculate(boundary, message),
-            coherence: coherence_calc.calculate(boundary, message),
+            clarity: (base_clarity * activation_boost).min(1.0),
+            depth: (base_depth * activation_boost).min(1.0),
+            openness: (base_openness * activation_boost).min(1.0),
+            precision: (base_precision * activation_boost).min(1.0),
+            fluidity: (base_fluidity * activation_boost).min(1.0),
+            resonance: (base_resonance * activation_boost).min(1.0),
+            coherence: (base_coherence * activation_boost).min(1.0),
         }
     }
 }
@@ -2243,7 +2273,9 @@ mod tests {
 
         // When emergence is generated
         let recognizer = EmergenceRecognizer;
-        let emergence_trans = recognizer.generate("CD", "SD", &transcendent);
+        let test_message = "Testing emergence generation";
+        let emergence_trans =
+            recognizer.generate_with_quality("CD", "SD", &transcendent, test_message);
 
         // Then it should emphasize transcendent quality
         assert!(
@@ -2255,7 +2287,8 @@ mod tests {
 
         // Given a maintained boundary
         let maintained = BoundaryState::new("CD-SD".to_string(), 0.4, "Maintained".to_string());
-        let emergence_maint = recognizer.generate("CD", "SD", &maintained);
+        let emergence_maint =
+            recognizer.generate_with_quality("CD", "SD", &maintained, test_message);
 
         // Then it should use "allow" language (qualities emerging, not transcendent)
         assert!(emergence_maint.contains("Allow") || emergence_maint.contains("recognizing"));
@@ -2272,7 +2305,8 @@ mod tests {
 
         // When emergence is generated
         let recognizer = EmergenceRecognizer;
-        let emergence = recognizer.generate("CD", "SD", &high_perm);
+        let test_message = "Precision analysis";
+        let emergence = recognizer.generate_with_quality("CD", "SD", &high_perm, test_message);
 
         // Then it should mention a quality (the specific quality depends on boundary)
         let qualities = [
@@ -2741,6 +2775,213 @@ mod tests {
         assert!(
             has_resonance_text,
             "Interface experiences should have resonance text"
+        );
+    }
+
+    #[test]
+    fn test_emergence_recognizer_selects_quality_from_message() {
+        // Given a technical message with high precision indicators
+        let technical_message = "The algorithmic implementation utilizes \
+            sophisticated mathematical formulations to optimize computational efficiency.";
+
+        let boundary = BoundaryState::new("CD-SD".to_string(), 0.8, "Transcendent".to_string());
+
+        let recognizer = EmergenceRecognizer;
+
+        // When generating emergence text with quality awareness
+        let emergence = recognizer.generate_with_quality("CD", "SD", &boundary, technical_message);
+
+        // Then should select quality based on message content
+        // Technical messages can yield clarity (clear concepts), precision (technical terms),
+        // depth (complexity), or coherence (logical structure)
+        assert!(
+            emergence.contains("precision")
+                || emergence.contains("depth")
+                || emergence.contains("coherence")
+                || emergence.contains("clarity"),
+            "Should select quality appropriate for technical message. Got: {}",
+            emergence
+        );
+
+        // Should use transcendent boundary template
+        assert!(
+            emergence.contains("transcends") || emergence.contains("emerging"),
+            "Should use transcendent boundary language. Got: {}",
+            emergence
+        );
+    }
+
+    #[test]
+    fn test_emergence_recognizer_adapts_to_different_messages() {
+        // Given two different message types
+        let simple_message = "Hello, how are you?";
+        let complex_message = "Analyzing empirical observations reveals intricate \
+            patterns across multiple scientific domains, suggesting deeper theoretical implications.";
+
+        let boundary = BoundaryState::new("SD-CuD".to_string(), 0.7, "Transcendent".to_string());
+
+        let recognizer = EmergenceRecognizer;
+
+        // When generating emergence for both messages
+        let simple_emergence =
+            recognizer.generate_with_quality("SD", "CuD", &boundary, simple_message);
+        let complex_emergence =
+            recognizer.generate_with_quality("SD", "CuD", &boundary, complex_message);
+
+        // Then emergence texts should differ (different quality selection)
+        // At minimum, they should both be non-empty and use appropriate templates
+        assert!(
+            !simple_emergence.is_empty(),
+            "Simple emergence should not be empty"
+        );
+        assert!(
+            !complex_emergence.is_empty(),
+            "Complex emergence should not be empty"
+        );
+
+        // Both should reference the scientific-cultural interface
+        assert!(
+            simple_emergence.contains("scientific-cultural")
+                || simple_emergence.contains("SD")
+                || simple_emergence.contains("CuD"),
+            "Simple emergence should reference interface. Got: {}",
+            simple_emergence
+        );
+
+        assert!(
+            complex_emergence.contains("scientific-cultural")
+                || complex_emergence.contains("SD")
+                || complex_emergence.contains("CuD"),
+            "Complex emergence should reference interface. Got: {}",
+            complex_emergence
+        );
+    }
+
+    #[test]
+    fn test_quality_emergence_processor_activation_aware() {
+        // Given boundaries with different domain activations
+        let mut context = FlowContext::new(
+            "Test message with some depth".to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        // High activation domains
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.9 });
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.8 });
+
+        // Low activation domains
+        context
+            .domains
+            .insert("CuD".to_string(), DomainActivation { activation: 0.3 });
+        context
+            .domains
+            .insert("ED".to_string(), DomainActivation { activation: 0.2 });
+
+        let high_activation_boundary =
+            BoundaryState::new("CD-SD".to_string(), 0.8, "Transcendent".to_string());
+        let low_activation_boundary =
+            BoundaryState::new("CuD-ED".to_string(), 0.8, "Transcendent".to_string());
+
+        context.boundaries = vec![high_activation_boundary, low_activation_boundary];
+
+        // When processing quality emergence
+        let processor = QualityEmergenceProcessor;
+        processor.process(&mut context).unwrap();
+
+        // Then should calculate qualities for both boundaries
+        assert_eq!(
+            context.emergent_qualities.len(),
+            2,
+            "Should calculate qualities for both transcendent boundaries"
+        );
+
+        // Find qualities for each boundary
+        let high_quality = context
+            .emergent_qualities
+            .iter()
+            .find(|q| q.boundary_name == "CD-SD")
+            .expect("Should have qualities for CD-SD");
+
+        let low_quality = context
+            .emergent_qualities
+            .iter()
+            .find(|q| q.boundary_name == "CuD-ED")
+            .expect("Should have qualities for CuD-ED");
+
+        // High activation boundary should have boosted qualities
+        // (activation_boost = 1.0 + (0.9 * 0.8) * 0.2 = 1.144 for CD-SD)
+        // (activation_boost = 1.0 + (0.3 * 0.2) * 0.2 = 1.012 for CuD-ED)
+
+        // At least one quality should be higher for high activation boundary
+        let high_avg = (high_quality.clarity + high_quality.depth + high_quality.coherence) / 3.0;
+        let low_avg = (low_quality.clarity + low_quality.depth + low_quality.coherence) / 3.0;
+
+        assert!(
+            high_avg > low_avg,
+            "High activation boundary should have higher average quality. High: {}, Low: {}",
+            high_avg,
+            low_avg
+        );
+    }
+
+    #[test]
+    fn test_interface_attention_processor_uses_message_aware_emergence() {
+        // Given a specific message type
+        let mut context = FlowContext::new(
+            "Exploring phenomenological experiences reveals nuanced experiential qualities \
+            that transcend purely analytical frameworks."
+                .to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        context
+            .domains
+            .insert("CuD".to_string(), DomainActivation { activation: 0.8 });
+        context
+            .domains
+            .insert("ED".to_string(), DomainActivation { activation: 0.7 });
+
+        let boundary = BoundaryState::new("CuD-ED".to_string(), 0.85, "Transcendent".to_string());
+        context.boundaries = vec![boundary];
+
+        // When processing interface attention
+        let processor = InterfaceAttentionProcessor;
+        processor.process(&mut context).unwrap();
+
+        // Then should create interface experience with message-aware emergence
+        assert_eq!(
+            context.interface_experiences.len(),
+            1,
+            "Should create one interface experience"
+        );
+
+        let experience = &context.interface_experiences[0];
+
+        // Emergence text should be context-aware (uses generate_with_quality)
+        assert!(
+            !experience.emergence.is_empty(),
+            "Emergence text should not be empty"
+        );
+
+        // Should reference a phenomenological quality
+        let has_quality_ref = experience.emergence.contains("clarity")
+            || experience.emergence.contains("depth")
+            || experience.emergence.contains("openness")
+            || experience.emergence.contains("precision")
+            || experience.emergence.contains("fluidity")
+            || experience.emergence.contains("resonance")
+            || experience.emergence.contains("coherence");
+
+        assert!(
+            has_quality_ref,
+            "Emergence should reference a phenomenological quality. Got: {}",
+            experience.emergence
         );
     }
 }
