@@ -128,6 +128,27 @@ impl MemoryManager {
         Ok(())
     }
 
+    /// Create snapshot with explicit quality values from flow process
+    /// This allows accurate quality tracking across sessions (Day 8)
+    pub async fn create_snapshot_with_qualities(
+        &self,
+        domains: Vec<DomainState>,
+        boundaries: Vec<BoundaryState>,
+        patterns: Vec<String>,
+        user_id: Uuid,
+        user_input: &str,
+        qualities: [u8; 7], // Pre-calculated quality values from flow process
+    ) -> Result<(), sqlx::Error> {
+        let mut compact_snapshot =
+            self.compress_snapshot(domains, boundaries, patterns, user_id, user_input);
+
+        // Override the calculated qualities with actual values from flow process
+        compact_snapshot.qualities = qualities;
+
+        self.save_snapshot_to_db(&compact_snapshot).await?;
+        Ok(())
+    }
+
     fn compress_snapshot(
         &self,
         domains: Vec<DomainState>,

@@ -358,10 +358,38 @@ impl VifApi {
             .map(|p| p.description.clone())
             .collect();
 
-        self.memory_manager
-            .create_snapshot(domains, boundaries, patterns, user_id, user_input)
-            .await
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        // Use quality-aware snapshot if qualities are available (Phase 3 Day 8)
+        if !flow_result.emergent_qualities.is_empty() {
+            // Take first quality set (typically from highest priority boundary)
+            let quality = &flow_result.emergent_qualities[0];
+            let quality_array = [
+                (quality.clarity * 100.0) as u8,
+                (quality.depth * 100.0) as u8,
+                (quality.openness * 100.0) as u8,
+                (quality.precision * 100.0) as u8,
+                (quality.fluidity * 100.0) as u8,
+                (quality.resonance * 100.0) as u8,
+                (quality.coherence * 100.0) as u8,
+            ];
+
+            self.memory_manager
+                .create_snapshot_with_qualities(
+                    domains,
+                    boundaries,
+                    patterns,
+                    user_id,
+                    user_input,
+                    quality_array,
+                )
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        } else {
+            // Fallback to regular snapshot without quality data
+            self.memory_manager
+                .create_snapshot(domains, boundaries, patterns, user_id, user_input)
+                .await
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        }
 
         // Use progressive loading for context creation
         if let Some(latest_snapshot) = self.get_latest_snapshot(user_id).await {
