@@ -3351,4 +3351,285 @@ mod tests {
         // The system successfully tracks quality values across sessions
         // Future enhancements can make quality calculators more sensitive to context differences
     }
+
+    // ============================================================================
+    // DAY 9: PERFORMANCE BENCHMARKS (2 tests)
+    // ============================================================================
+
+    #[tokio::test]
+    async fn test_performance_seven_stage_pipeline_end_to_end() {
+        // GIVEN: A database and flow context for benchmarking
+        use crate::test_utils::setup_test_db;
+        use std::time::Instant;
+
+        let _db_pool = setup_test_db().await.unwrap();
+
+        // Create realistic test input
+        let test_input = "Analyzing complex patterns reveals deep structural coherence across computational and experiential domains";
+        let base_permeability = 0.7;
+
+        // Prepare initial state
+        let initial_state = create_test_framework_state();
+
+        // WHEN: We measure 7-stage pipeline execution time over 100 iterations
+        let iterations = 100;
+        let mut durations = Vec::with_capacity(iterations);
+
+        for _ in 0..iterations {
+            let start = Instant::now();
+
+            // Execute full 7-stage pipeline
+            let mut context = FlowContext::new(
+                test_input.to_string(),
+                base_permeability,
+                initial_state.clone(),
+            );
+
+            // Stage 1: Domain Emergence (simulated)
+            context
+                .domains
+                .insert("CD".to_string(), DomainActivation { activation: 0.9 });
+            context
+                .domains
+                .insert("SD".to_string(), DomainActivation { activation: 0.8 });
+            context
+                .domains
+                .insert("CuD".to_string(), DomainActivation { activation: 0.7 });
+            context
+                .domains
+                .insert("ED".to_string(), DomainActivation { activation: 0.85 });
+
+            // Stage 2: Boundary Dissolution
+            let boundary1 =
+                BoundaryState::new("CD-SD".to_string(), 0.85, "Transcendent".to_string());
+            let boundary2 =
+                BoundaryState::new("SD-CuD".to_string(), 0.75, "Transitional".to_string());
+            let boundary3 =
+                BoundaryState::new("CuD-ED".to_string(), 0.80, "Transcendent".to_string());
+            context.boundaries = vec![boundary1, boundary2, boundary3];
+
+            // Stage 3: Interface Attention
+            let processor3 = InterfaceAttentionProcessor;
+            processor3.process(&mut context).unwrap();
+
+            // Stage 4: Quality Emergence
+            let processor4 = QualityEmergenceProcessor;
+            processor4.process(&mut context).unwrap();
+
+            // Stage 5: Integration (simulated - lightweight)
+            // In real system, this would call LLM
+            context.llm_response = "Integrated response with cross-domain insights".to_string();
+
+            // Stage 6: Continuity (simulated - pattern extraction)
+            let processor6 = ContinuityProcessor;
+            processor6.process(&mut context).unwrap();
+
+            // Stage 7: Evolution (simulated - stage tracking)
+            let processor7 = EvolutionProcessor;
+            processor7.process(&mut context).unwrap();
+
+            let duration = start.elapsed();
+            durations.push(duration.as_millis() as f64);
+        }
+
+        // THEN: Calculate performance metrics
+        durations.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let mean = durations.iter().sum::<f64>() / durations.len() as f64;
+        let median = durations[durations.len() / 2];
+        let p95_index = (durations.len() as f64 * 0.95) as usize;
+        let p95 = durations[p95_index];
+        let p99_index = (durations.len() as f64 * 0.99) as usize;
+        let p99 = durations[p99_index];
+
+        // Print performance metrics for analysis
+        println!("\n=== 7-Stage Pipeline Performance (n={}) ===", iterations);
+        println!("Mean:   {:.2}ms", mean);
+        println!("Median: {:.2}ms", median);
+        println!("P95:    {:.2}ms", p95);
+        println!("P99:    {:.2}ms", p99);
+        println!("Min:    {:.2}ms", durations[0]);
+        println!("Max:    {:.2}ms", durations[durations.len() - 1]);
+
+        // ASSERT: Performance is acceptable for production use
+        // Target: P95 < 500ms for 7-stage pipeline without LLM call
+        // (LLM call would add ~500-2000ms depending on provider)
+        assert!(
+            p95 < 500.0,
+            "P95 latency ({:.2}ms) exceeds target of 500ms",
+            p95
+        );
+
+        // Mean should be reasonable (< 250ms for non-LLM stages)
+        assert!(
+            mean < 250.0,
+            "Mean latency ({:.2}ms) exceeds reasonable target of 250ms",
+            mean
+        );
+
+        // This establishes baseline for future regression testing
+    }
+
+    #[tokio::test]
+    async fn test_performance_memory_operations() {
+        // GIVEN: A database and memory manager for benchmarking
+        use crate::memory::MemoryManager;
+        use crate::prompt_engine::DomainState;
+        use crate::test_utils::setup_test_db;
+        use sqlx::types::Uuid;
+        use std::time::Instant;
+
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let user_id = Uuid::new_v4();
+
+        // Create test user
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("perf-test@example.com")
+        .bind("Performance Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Prepare realistic snapshot data
+        let domains = vec![
+            DomainState {
+                name: "CD".to_string(),
+                state: "Computational".to_string(),
+            },
+            DomainState {
+                name: "SD".to_string(),
+                state: "Scientific".to_string(),
+            },
+            DomainState {
+                name: "CuD".to_string(),
+                state: "Cultural".to_string(),
+            },
+            DomainState {
+                name: "ED".to_string(),
+                state: "Experiential".to_string(),
+            },
+        ];
+
+        let boundary = BoundaryState::new("CD-SD".to_string(), 0.85, "Transcendent".to_string());
+        let boundaries = vec![boundary];
+
+        let patterns = vec![
+            "pattern_1".to_string(),
+            "pattern_2".to_string(),
+            "pattern_3".to_string(),
+        ];
+
+        let qualities = [85, 78, 82, 75, 88, 90, 84];
+
+        let user_input = "Complex analysis requiring deep integration";
+
+        // WHEN: We measure save operation performance over 100 iterations
+        let iterations = 100;
+        let mut save_durations = Vec::with_capacity(iterations);
+
+        for _ in 0..iterations {
+            let start = Instant::now();
+
+            memory_manager
+                .create_snapshot_with_qualities(
+                    domains.clone(),
+                    boundaries.clone(),
+                    patterns.clone(),
+                    user_id,
+                    user_input,
+                    qualities,
+                )
+                .await
+                .unwrap();
+
+            let duration = start.elapsed();
+            save_durations.push(duration.as_millis() as f64);
+        }
+
+        // WHEN: We measure load operation performance over 100 iterations
+        let mut load_durations = Vec::with_capacity(iterations);
+
+        for _ in 0..iterations {
+            let start = Instant::now();
+
+            let _snapshot = memory_manager
+                .get_latest_snapshot(user_id)
+                .await
+                .unwrap()
+                .expect("Should have snapshot");
+
+            let duration = start.elapsed();
+            load_durations.push(duration.as_millis() as f64);
+        }
+
+        // THEN: Calculate save operation metrics
+        save_durations.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let save_mean = save_durations.iter().sum::<f64>() / save_durations.len() as f64;
+        let save_median = save_durations[save_durations.len() / 2];
+        let save_p95_index = (save_durations.len() as f64 * 0.95) as usize;
+        let save_p95 = save_durations[save_p95_index];
+
+        println!("\n=== Memory Save Performance (n={}) ===", iterations);
+        println!("Mean:   {:.2}ms", save_mean);
+        println!("Median: {:.2}ms", save_median);
+        println!("P95:    {:.2}ms", save_p95);
+        println!("Min:    {:.2}ms", save_durations[0]);
+        println!("Max:    {:.2}ms", save_durations[save_durations.len() - 1]);
+
+        // THEN: Calculate load operation metrics
+        load_durations.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let load_mean = load_durations.iter().sum::<f64>() / load_durations.len() as f64;
+        let load_median = load_durations[load_durations.len() / 2];
+        let load_p95_index = (load_durations.len() as f64 * 0.95) as usize;
+        let load_p95 = load_durations[load_p95_index];
+
+        println!("\n=== Memory Load Performance (n={}) ===", iterations);
+        println!("Mean:   {:.2}ms", load_mean);
+        println!("Median: {:.2}ms", load_median);
+        println!("P95:    {:.2}ms", load_p95);
+        println!("Min:    {:.2}ms", load_durations[0]);
+        println!("Max:    {:.2}ms", load_durations[load_durations.len() - 1]);
+
+        // ASSERT: Memory operations meet performance targets
+        // Save target: P95 < 50ms
+        assert!(
+            save_p95 < 50.0,
+            "Save P95 latency ({:.2}ms) exceeds target of 50ms",
+            save_p95
+        );
+
+        // Load target: P95 < 30ms
+        assert!(
+            load_p95 < 30.0,
+            "Load P95 latency ({:.2}ms) exceeds target of 30ms",
+            load_p95
+        );
+
+        // Mean save should be reasonable (< 25ms)
+        assert!(
+            save_mean < 25.0,
+            "Save mean latency ({:.2}ms) exceeds reasonable target of 25ms",
+            save_mean
+        );
+
+        // Mean load should be reasonable (< 15ms)
+        assert!(
+            load_mean < 15.0,
+            "Load mean latency ({:.2}ms) exceeds reasonable target of 15ms",
+            load_mean
+        );
+
+        // These baselines enable future regression detection
+    }
 }
