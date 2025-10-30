@@ -173,7 +173,7 @@ Built the missing piece instead of working around it. Quality values from flow p
 - **Coverage:** Maintained at 75%+
 - **Clippy:** Clean (0 warnings, 0 errors)
 
-**Commit:** [Ready for commit]
+**Commit:** `1dcf8f7` - "Implement Phase 3 Day 8: Quality Tracking Across Sessions"
 
 ---
 
