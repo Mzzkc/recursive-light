@@ -909,4 +909,142 @@ mod tests {
             "Should have at least one snapshot after concurrent operations"
         );
     }
+
+    #[tokio::test]
+    async fn test_snapshot_corruption_detection_and_recovery() {
+        // GIVEN: Multiple valid snapshots for a user
+        use crate::test_utils::setup_test_db;
+
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+
+        let user_id = Uuid::new_v4();
+
+        // Create user
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Create Snapshot 1 (valid)
+        let domains_1 = vec![DomainState {
+            name: "CD".to_string(),
+            state: "0.8".to_string(),
+        }];
+        let boundaries_1 = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.7,
+            "Transcendent".to_string(),
+        )];
+
+        memory_manager
+            .create_snapshot(
+                domains_1.clone(),
+                boundaries_1.clone(),
+                vec!["pattern1".to_string()],
+                user_id,
+                "First message",
+            )
+            .await
+            .unwrap();
+
+        let snapshot_1 = memory_manager
+            .get_latest_snapshot(user_id)
+            .await
+            .unwrap()
+            .expect("Should have Snapshot 1");
+
+        // Wait to ensure timestamp difference
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+        // Create Snapshot 2 (valid)
+        let domains_2 = vec![DomainState {
+            name: "SD".to_string(),
+            state: "0.9".to_string(),
+        }];
+        let boundaries_2 = vec![BoundaryState::new(
+            "SD-CuD".to_string(),
+            0.8,
+            "Transcendent".to_string(),
+        )];
+
+        memory_manager
+            .create_snapshot(
+                domains_2.clone(),
+                boundaries_2.clone(),
+                vec!["pattern2".to_string()],
+                user_id,
+                "Second message",
+            )
+            .await
+            .unwrap();
+
+        let snapshot_2 = memory_manager
+            .get_latest_snapshot(user_id)
+            .await
+            .unwrap()
+            .expect("Should have Snapshot 2");
+
+        // WHEN: Manually corrupt Snapshot 2 (simulate incomplete write)
+        // Corrupt by setting metadata to invalid JSON (simulating power loss mid-write)
+        let snapshot_2_id = Uuid::parse_str(snapshot_2.id()).unwrap();
+
+        sqlx::query("UPDATE state_snapshots SET metadata = ? WHERE id = ?")
+            .bind("{incomplete_json: true, missing_closing_brace") // Invalid JSON
+            .bind(snapshot_2_id.as_bytes().to_vec())
+            .execute(&db_pool)
+            .await
+            .unwrap();
+
+        // THEN: get_latest_snapshot should detect corruption and return Snapshot 1
+        let recovery_result = memory_manager.get_latest_snapshot(user_id).await;
+
+        match recovery_result {
+            Ok(Some(recovered)) => {
+                // System should return Snapshot 1 (skip corrupted Snapshot 2)
+                assert_eq!(
+                    recovered.id(),
+                    snapshot_1.id(),
+                    "Should return previous valid snapshot, not corrupted one"
+                );
+
+                assert_ne!(
+                    recovered.id(),
+                    snapshot_2.id(),
+                    "Should NOT return corrupted snapshot"
+                );
+
+                // Additional validation: Verify Snapshot 1 data is intact
+                assert_eq!(
+                    recovered.domain_values().len(),
+                    snapshot_1.domain_values().len(),
+                    "Recovered snapshot should have same domain structure as Snapshot 1"
+                );
+
+                assert_eq!(
+                    recovered.pattern_ids().len(),
+                    snapshot_1.pattern_ids().len(),
+                    "Recovered snapshot should have same patterns as Snapshot 1"
+                );
+            }
+            Ok(None) => {
+                panic!("Should return Snapshot 1, not None");
+            }
+            Err(e) => {
+                // Acceptable: Return error indicating corruption detected
+                // System should not panic or return corrupted data
+                println!("Corruption detected gracefully: {:?}", e);
+            }
+        }
+    }
 }

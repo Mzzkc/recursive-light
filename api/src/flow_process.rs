@@ -34,7 +34,7 @@ pub enum DevelopmentalStage {
 }
 
 /// Domain activation state
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DomainActivation {
     pub activation: f64,
 }
@@ -1337,7 +1337,7 @@ impl Default for FlowProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::prompt_engine::{BoundaryState, DomainRegistry, FrameworkState};
+    use crate::prompt_engine::{BoundaryState, DomainRegistry, DomainState, FrameworkState};
 
     fn create_test_framework_state() -> FrameworkState {
         FrameworkState {
@@ -3631,5 +3631,248 @@ mod tests {
         );
 
         // These baselines enable future regression detection
+    }
+
+    #[tokio::test]
+    async fn test_flow_process_partial_failure_recovery() {
+        // GIVEN: A flow context that will fail at Stage 3 (InterfaceAttentionProcessor)
+        // This simulates LLM timeout or provider error during interface generation
+
+        let mut context = FlowContext::new(
+            "Test message requiring multi-stage processing".to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        // Populate domains (Stage 1 succeeds)
+        context
+            .domains
+            .insert("CD".to_string(), DomainActivation { activation: 0.8 });
+        context
+            .domains
+            .insert("SD".to_string(), DomainActivation { activation: 0.7 });
+
+        // Populate boundaries (Stage 2 succeeds)
+        context.boundaries = vec![BoundaryState::new(
+            "CD-SD".to_string(),
+            0.8,
+            "Transcendent".to_string(),
+        )];
+
+        // WHEN: Stage 3 fails (simulate by skipping InterfaceAttentionProcessor)
+        // Then attempt Stages 4-7 with partial context
+
+        // Stage 4: Quality Emergence (should work with boundaries even without interface experiences)
+        let processor_4 = QualityEmergenceProcessor;
+        let result_4 = processor_4.process(&mut context);
+        assert!(
+            result_4.is_ok(),
+            "Stage 4 should continue with available context"
+        );
+
+        // Stage 5: Integration (should work with domains/boundaries/qualities)
+        let processor_5 = IntegrationProcessor;
+        let result_5 = processor_5.process(&mut context);
+        assert!(result_5.is_ok(), "Stage 5 should integrate available data");
+
+        // Stage 6: Continuity (should extract patterns from partial context)
+        let processor_6 = ContinuityProcessor;
+        let result_6 = processor_6.process(&mut context);
+        assert!(
+            result_6.is_ok(),
+            "Stage 6 should continue with partial data"
+        );
+
+        // Stage 7: Evolution (should calculate developmental stage from available metrics)
+        let processor_7 = EvolutionProcessor;
+        let result_7 = processor_7.process(&mut context);
+        assert!(
+            result_7.is_ok(),
+            "Stage 7 should complete with degraded context"
+        );
+
+        // THEN: Verify system degraded gracefully
+        assert!(
+            !context.emergent_qualities.is_empty(),
+            "Should calculate qualities even without interface experiences"
+        );
+
+        assert!(
+            !context.structured_prompt.is_empty(),
+            "Should produce structured prompt with partial data"
+        );
+
+        // Measure degradation (optional - for scientific validation)
+        let quality_count = context.emergent_qualities.len();
+        let pattern_count = context.patterns.len();
+
+        // System should produce SOME output, even if reduced
+        assert!(
+            quality_count > 0 || pattern_count > 0,
+            "System should produce partial output: qualities={}, patterns={}",
+            quality_count,
+            pattern_count
+        );
+    }
+
+    #[tokio::test]
+    async fn test_memory_save_failure_transactional_consistency() {
+        // GIVEN: A completed 7-stage flow process
+        use crate::memory::MemoryManager;
+        use crate::test_utils::setup_test_db;
+        use sqlx::types::Uuid;
+
+        let db_pool = setup_test_db().await.unwrap();
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+
+        // Create user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Execute full flow process
+        let context = FlowContext::new(
+            "Test message for transactional consistency".to_string(),
+            0.7,
+            create_test_framework_state(),
+        );
+
+        let flow_process = FlowProcess::new();
+        let context = flow_process.execute(context).unwrap();
+
+        // Capture flow process output state
+        let original_domains = context.domains.clone();
+        let original_boundaries = context.boundaries.clone();
+        let original_qualities = context.emergent_qualities.clone();
+        let original_patterns = context.patterns.clone();
+        let original_structured_prompt = context.structured_prompt.clone();
+
+        // WHEN: Attempt to save to DB with simulated failure
+        // Simulate by closing the database connection pool
+        db_pool.close().await;
+
+        let domains_vec: Vec<DomainState> = context
+            .domains
+            .iter()
+            .map(|(name, activation)| DomainState {
+                name: name.clone(),
+                state: activation.activation.to_string(),
+            })
+            .collect();
+
+        let patterns_vec: Vec<String> = context
+            .patterns
+            .iter()
+            .map(|p| p.description.clone())
+            .collect();
+
+        let save_result = memory_manager
+            .create_snapshot(
+                domains_vec,
+                context.boundaries.clone(),
+                patterns_vec.clone(),
+                user_id,
+                &context.user_input,
+            )
+            .await;
+
+        // Save should fail (database closed)
+        assert!(
+            save_result.is_err(),
+            "Save should fail with closed database"
+        );
+
+        // THEN: Verify FlowContext data remains intact (transactional consistency)
+        assert_eq!(
+            context.domains, original_domains,
+            "Domain activations should remain unchanged after failed save"
+        );
+
+        assert_eq!(
+            context.boundaries.len(),
+            original_boundaries.len(),
+            "Boundaries should remain unchanged after failed save"
+        );
+
+        assert_eq!(
+            context.emergent_qualities.len(),
+            original_qualities.len(),
+            "Emergent qualities should remain unchanged after failed save"
+        );
+
+        assert_eq!(
+            context.patterns.len(),
+            original_patterns.len(),
+            "Patterns should remain unchanged after failed save"
+        );
+
+        assert_eq!(
+            context.structured_prompt, original_structured_prompt,
+            "Structured prompt should remain unchanged after failed save"
+        );
+
+        // Verify retry would work (with fresh DB connection)
+        let db_pool_retry = setup_test_db().await.unwrap();
+        let memory_manager_retry = MemoryManager {
+            db_pool: db_pool_retry.clone(),
+        };
+
+        // Re-create user in fresh DB
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool_retry)
+        .await
+        .unwrap();
+
+        let domains_vec: Vec<DomainState> = context
+            .domains
+            .iter()
+            .map(|(name, activation)| DomainState {
+                name: name.clone(),
+                state: activation.activation.to_string(),
+            })
+            .collect();
+
+        let patterns_vec: Vec<String> = context
+            .patterns
+            .iter()
+            .map(|p| p.description.clone())
+            .collect();
+
+        // Retry save with fresh connection
+        let retry_result = memory_manager_retry
+            .create_snapshot(
+                domains_vec,
+                context.boundaries.clone(),
+                patterns_vec,
+                user_id,
+                &context.user_input,
+            )
+            .await;
+
+        assert!(
+            retry_result.is_ok(),
+            "Retry should succeed with valid FlowContext: {:?}",
+            retry_result.err()
+        );
     }
 }
