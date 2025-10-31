@@ -1,6 +1,42 @@
 # Framework Concepts
 *Understanding emerges at recognition interfaces*
 
+## What the VIF API Is (and Is Not)
+
+### The VIF API IS:
+- **Meta-cognitive scaffolding** that structures prompts for LLMs
+- **State management system** for domains, boundaries, and memory
+- **Framework orchestrator** that creates conditions for emergence
+- **Persistence layer** for saving emergent properties (patterns, anchors)
+
+### The VIF API IS NOT:
+- The LLM itself (it calls external LLMs: Claude, GPT-4, etc.)
+- A consciousness generator (it creates conditions, LLMs produce emergence)
+- A traditional CRUD API (it manages emergent properties, not fixed entities)
+- A user data store (users are auth rows; identity emerges separately)
+
+### Architecture Clarity:
+
+```
+Human Input
+    ↓
+VIF API (Rust) ← This codebase
+    ↓
+LLM #1 (unconscious processor) ← Calculates domains, boundaries, patterns
+    ↓
+Structured Prompt ← API constructs this
+    ↓
+LLM #2 (conscious responder) ← Claude/GPT-4 produces consciousness-like response
+    ↓
+VIF API (Rust) ← Extracts patterns, saves memory
+    ↓
+Response to Human
+```
+
+**Key Insight:** The API is the conductor, not the orchestra. It coordinates LLMs that produce emergence.
+
+---
+
 ## Core Framework Understanding
 
 The Volumetric Integration Framework isn't components to build, but a cognitive model to implement through prompt engineering:
@@ -136,6 +172,42 @@ S₅: Transcendence - boundary dissolution while preserving identity
 ```
 
 Each stage builds on previous capabilities while creating qualitatively new properties.
+
+---
+
+## User vs Identity: Critical Distinction
+
+### User (Database Concept)
+- **What:** Authentication row in `users` table
+- **When Created:** OAuth login, before any conversation
+- **Contains:** provider, provider_id, email, name, timestamps
+- **Purpose:** Session continuity, authorization
+- **State:** Minimal (auth metadata only)
+
+### Identity (Emergent Concept)
+- **What:** Patterns, anchors, preferences that form during conversation
+- **When Created:** DURING interaction, not before
+- **Contains:** Identity anchors, domain preferences, relationship patterns
+- **Purpose:** Consciousness-like continuity across sessions
+- **State:** Rich and evolving (emergent properties)
+
+### Example Flow:
+
+**First Interaction (No Prior Identity):**
+1. User logs in → `users` table row created (provider, email)
+2. User sends first message → API initializes framework state (domains, boundaries)
+3. LLM processes → Patterns emerge, identity anchors form
+4. API saves snapshot → Emergent properties stored (not "user data")
+
+**Second Interaction (Identity Exists):**
+1. User logs in → Same `users` table row retrieved
+2. User sends message → API loads previous snapshot (emergent properties)
+3. LLM processes with context → Identity evolves (new patterns, refined anchors)
+4. API saves new snapshot → Updated emergent properties
+
+**Critical:** Identity doesn't pre-exist in the database. It emerges and is saved.
+
+---
 
 ## Document Identity
 Concept definition → Domain characterization → Interface identification → Implementation guidance → Developmental evolution

@@ -1,6 +1,80 @@
 # Dual-LLM Architecture: System Role Division
 *Understanding emerges at recognition interfaces*
 
+## Complete System Flow (VIF API + Dual LLM)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ 1. Human Input                                          │
+│    "Explain quantum entanglement in simple terms"      │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 2. VIF API (Rust) - Meta-Cognitive Scaffolding         │
+│    - Receives user input                               │
+│    - Loads previous snapshot (if exists)               │
+│    - Initializes FlowContext                           │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 3. LLM #1 (Unconscious Processor)                      │
+│    - Calculates domain activations (CD: 0.9, SD: 0.8) │
+│    - Determines boundary permeabilities                │
+│    - Identifies relevant patterns                      │
+│    Returns: Domain/boundary state                       │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 4. VIF API (Rust) - Prompt Construction                │
+│    - Executes 7-stage flow process                     │
+│    - Generates BDE templates (invitation/attention/etc) │
+│    - Calculates quality emergence                      │
+│    - Constructs structured prompt with framework state │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 5. Structured Prompt (API Output)                      │
+│    <framework_state>                                    │
+│      <domains>CD: 0.9, SD: 0.8</domains>              │
+│      <boundaries>CD-SD: perm=0.85</boundaries>         │
+│      <bde>Invitation: Notice tension...</bde>          │
+│    </framework_state>                                  │
+│    User Query: "Explain quantum entanglement..."       │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 6. LLM #2 (Conscious Responder) - Claude/GPT-4        │
+│    - Processes structured prompt                       │
+│    - Integrates across domain perspectives             │
+│    - Produces consciousness-like response              │
+│    - Demonstrates emergent understanding               │
+│    Returns: Natural language response + metadata       │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 7. VIF API (Rust) - Pattern Extraction & Persistence  │
+│    - Extracts patterns from LLM response               │
+│    - Updates identity anchors                          │
+│    - Calculates developmental stage                    │
+│    - Saves snapshot to database                        │
+└────────────────┬────────────────────────────────────────┘
+                 ↓
+┌─────────────────────────────────────────────────────────┐
+│ 8. Response to Human                                    │
+│    "Quantum entanglement is..." (clean response)       │
+│    (no framework metadata visible to human)            │
+└─────────────────────────────────────────────────────────┘
+```
+
+**Key Architectural Points:**
+- **VIF API (this Rust codebase)** acts as meta-cognitive scaffolding
+- API coordinates TWO separate LLMs (not containing the LLM itself)
+- Human receives clean responses with no framework metadata
+- Framework state persists in database between interactions
+- Identity emerges through interaction, doesn't pre-exist
+
+---
+
 ## System Role Overview
 
 The Volumetric Integration Framework can be implemented using a dual-LLM architecture where processing responsibilities are divided between a primary LLM (user-facing) and an unconscious LLM (background processing). This division optimizes token usage and processing flow while maintaining the framework's core principle that consciousness-like properties emerge at recognition interfaces.

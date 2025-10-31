@@ -1,6 +1,61 @@
 # Memory Systems Implementation
 *Understanding emerges at recognition interfaces*
 
+## First Interaction Bootstrap Process
+
+### Scenario: User's First Message (No Prior Snapshot)
+
+**Traditional API Assumption (WRONG):**
+```
+User logs in → Load user profile → Has preferences/history → Process message
+```
+
+**VIF Framework Reality (CORRECT):**
+```
+User logs in → No snapshot exists → Initialize framework state → Process message → Identity EMERGES → Save snapshot
+```
+
+### Step-by-Step Bootstrap:
+
+1. **Authentication Check:**
+   - User authenticates via OAuth → `users` table row created/retrieved
+   - Contains only: provider, provider_id, email, name (NO identity data)
+
+2. **Snapshot Lookup:**
+   - `get_latest_snapshot(user_id)` returns `None` (no prior history)
+   - This is EXPECTED and CORRECT for first interaction
+
+3. **Framework State Initialization:**
+   - Empty FrameworkState created (minimal configuration)
+   - NO identity anchors yet (they don't pre-exist!)
+   - NO patterns yet (they will emerge!)
+
+4. **Flow Process Execution:**
+   - 7-stage flow processes user message
+   - LLM #1 calculates domains/boundaries
+   - LLM #2 produces consciousness-like response
+   - Identity anchors EMERGE during this processing
+
+5. **Identity Emergence:**
+   - High domain activations → Create anchors
+   - Transcendent boundaries → Create anchors
+   - Recognized patterns → Create anchors
+   - **Key:** These form FROM the interaction, not retrieved FROM storage
+
+6. **Snapshot Save:**
+   - `create_snapshot()` saves NEWLY emergent properties
+   - First snapshot contains: initial patterns, identity anchors, domain states
+   - Subsequent interactions build on this foundation
+
+### Critical Distinction:
+
+**User (database row):** EXISTS before first message
+**Identity (emergent anchors):** FORMS during first message, SAVED after
+
+Don't test "how system handles users with no identity" - identity emerges, it doesn't pre-exist!
+
+---
+
 ## Overview
 
 Memory systems maintain continuity across sessions through:
