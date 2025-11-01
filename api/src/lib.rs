@@ -252,6 +252,7 @@ pub struct VifApi {
     provider: Box<dyn LlmProvider>,
     prompt_engine: PromptEngine,
     memory_manager: MemoryManager,
+    memory_tier_manager: dual_llm::MemoryTierManager,
     token_optimizer: TokenOptimizer,
     ajm: AutonomousJudgementModule,
     hlip_integration: HLIPIntegration,
@@ -282,6 +283,9 @@ impl VifApi {
         let memory_manager = MemoryManager::new(database_url)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        let memory_tier_manager = dual_llm::MemoryTierManager::from_url(database_url)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let token_optimizer = TokenOptimizer::new(1024); // Example token budget
         let hlip_integration = HLIPIntegration::new();
 
@@ -302,6 +306,7 @@ impl VifApi {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -314,6 +319,20 @@ impl VifApi {
         user_input: &str,
         user_id: Uuid,
     ) -> Result<String, Box<dyn std::error::Error>> {
+        // Phase 1A: Get or create conversation session for hot memory
+        let session_id = self
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        // Phase 1A: Load hot memory (last 3-5 turns) - TODO: Use in LLM #2 context (Phase 2)
+        let _hot_memory = self
+            .memory_tier_manager
+            .load_hot_memory(session_id)
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
         // Use AJM to determine autonomy level
         let autonomy = self.ajm.get_autonomy();
 
@@ -398,6 +417,28 @@ impl VifApi {
             // Use context for further processing or response generation
         }
 
+        // Phase 1A: Save conversation turn to hot memory
+        // Rough token estimation: word count * 1.3 (will be replaced with proper tokenization in Phase 2)
+        let input_tokens = (user_input.split_whitespace().count() as f32 * 1.3) as i32;
+        let output_tokens = (response.split_whitespace().count() as f32 * 1.3) as i32;
+        let snapshot_id = self
+            .get_latest_snapshot(user_id)
+            .await
+            .and_then(|s| Uuid::parse_str(s.id()).ok());
+
+        self.memory_tier_manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                user_input,
+                &response,
+                snapshot_id,
+                input_tokens,
+                output_tokens,
+            )
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
         Ok(response)
     }
 
@@ -453,7 +494,10 @@ mod tests {
             .register_domain(Box::new(ExperientialDomain));
 
         let prompt_engine = PromptEngine::new(framework_state.clone());
-        let memory_manager = MemoryManager { db_pool };
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -473,6 +517,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -584,6 +629,7 @@ mod tests {
         let memory_manager = MemoryManager {
             db_pool: db_pool.clone(),
         };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -600,6 +646,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -671,6 +718,7 @@ mod tests {
         let memory_manager = MemoryManager {
             db_pool: db_pool.clone(),
         };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -687,6 +735,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -756,6 +805,7 @@ mod tests {
         let memory_manager = MemoryManager {
             db_pool: db_pool.clone(),
         };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -772,6 +822,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -824,6 +875,7 @@ mod tests {
         let memory_manager = MemoryManager {
             db_pool: db_pool.clone(),
         };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -840,6 +892,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -894,6 +947,7 @@ mod tests {
         let memory_manager = MemoryManager {
             db_pool: db_pool.clone(),
         };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
         let token_optimizer = TokenOptimizer::new(1024);
         let hlip_integration = HLIPIntegration::new();
 
@@ -910,6 +964,7 @@ mod tests {
             provider,
             prompt_engine,
             memory_manager,
+            memory_tier_manager,
             token_optimizer,
             ajm,
             hlip_integration,
