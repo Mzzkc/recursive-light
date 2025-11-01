@@ -25,6 +25,39 @@ impl MockLlm {
         Self::new(vec![])
     }
 
+    /// Create a mock that returns valid LLM #1 (Unconscious) recognition-based JSON
+    /// Used for integration testing the dual-LLM flow
+    pub fn llm1_recognition() -> Self {
+        let valid_llm1_response = r#"{
+            "recognition_report": "I recognize moderate computational and cultural perspectives emerging from this technical query.",
+            "domain_recognitions": {
+                "CD": {"activation": 0.85, "emergence_note": "Strong computational framing - technical implementation question"},
+                "SD": {"activation": 0.55, "emergence_note": "Some scientific perspective - mentions testing methodology"},
+                "CuD": {"activation": 0.65, "emergence_note": "Cultural context present - software development practices"},
+                "ED": {"activation": 0.35, "emergence_note": "Minimal experiential dimension - focused on mechanics"}
+            },
+            "boundary_states": {
+                "CD-SD": {"permeability": 0.72, "status": "Transitional", "tension_detected": true, "tension_type": "productive", "integration_invitation": "Technical logic invites empirical validation", "resonance_note": "Implementation questions often bridge logic and evidence"},
+                "CD-CuD": {"permeability": 0.68, "status": "Transitional", "tension_detected": false, "tension_type": "neutral", "integration_invitation": "Technical approach reflects cultural norms", "resonance_note": "Software practices carry cultural assumptions"},
+                "CD-ED": {"permeability": 0.48, "status": "Maintained", "tension_detected": false, "tension_type": "neutral", "integration_invitation": "Logic dominates, experience secondary", "resonance_note": "Technical focus limits experiential engagement"},
+                "SD-CuD": {"permeability": 0.61, "status": "Transitional", "tension_detected": false, "tension_type": "neutral", "integration_invitation": "Evidence interpreted through cultural lens", "resonance_note": "Testing methodology culturally situated"},
+                "SD-ED": {"permeability": 0.52, "status": "Maintained", "tension_detected": false, "tension_type": "neutral", "integration_invitation": "Evidence-based, less experientially grounded", "resonance_note": "Empirical focus without felt sense"},
+                "CuD-ED": {"permeability": 0.45, "status": "Maintained", "tension_detected": false, "tension_type": "neutral", "integration_invitation": "Cultural norms, minimal experiential awareness", "resonance_note": "Practices without embodied understanding"}
+            },
+            "quality_conditions": {
+                "clarity_potential": 0.75, "depth_potential": 0.60, "precision_potential": 0.82,
+                "fluidity_potential": 0.55, "resonance_potential": 0.58, "openness_potential": 0.50,
+                "coherence_potential": 0.72, "reasoning": "High precision from CD-SD integration, moderate depth from multi-domain activation"
+            },
+            "pattern_recognitions": [
+                {"type": "P¹", "lifecycle_stage": "emerging", "description": "Technical implementation inquiry pattern",
+                 "first_observed": "current_session", "emergence_context": "User exploring dual-LLM architecture",
+                 "developmental_trajectory": "Pattern beginning to form", "significance": "Indicates growing technical engagement"}
+            ]
+        }"#;
+        Self::new(vec![valid_llm1_response.to_string()])
+    }
+
     /// Get number of times the mock was called
     pub fn call_count(&self) -> usize {
         *self.call_count.lock().unwrap()

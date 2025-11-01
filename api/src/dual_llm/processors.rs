@@ -278,8 +278,9 @@ impl StageProcessor for UnconscciousLlmProcessor {
         let prompt = self.build_llm1_prompt(&context.user_input, None);
 
         // Call LLM #1 with retry logic (blocking on async)
-        let runtime = tokio::runtime::Handle::current();
-        let llm1_result = runtime.block_on(self.call_llm1_with_retry(&prompt));
+        let llm1_result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(self.call_llm1_with_retry(&prompt));
 
         match llm1_result {
             Ok(llm1_output) => {
@@ -306,9 +307,15 @@ impl StageProcessor for UnconscciousLlmProcessor {
                 }
 
                 // Store pattern recognitions from LLM #1
-                // Note: FlowContext.patterns uses PatternObservation, convert from recognition format
-                // For now, we'll skip pattern storage to avoid type mismatch
-                // TODO: Integrate pattern recognitions properly with developmental lifecycle
+                // Convert PatternRecognition to PatternObservation (simple description extraction)
+                // Full lifecycle tracking deferred to Phase 4
+                context.patterns = llm1_output
+                    .pattern_recognitions
+                    .iter()
+                    .map(|pr| crate::flow_process::PatternObservation {
+                        description: pr.description.clone(),
+                    })
+                    .collect();
 
                 println!(
                     "LLM #1 processed input: {} domains activated, {} boundaries updated",
@@ -334,6 +341,20 @@ impl StageProcessor for UnconscciousLlmProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::prompt_engine::{BoundaryState, DomainRegistry, FrameworkState};
+
+    /// Helper to create a basic FrameworkState for testing
+    fn create_test_framework_state() -> FrameworkState {
+        FrameworkState {
+            domain_registry: DomainRegistry::new(),
+            boundaries: vec![
+                BoundaryState::new("CD-SD".to_string(), 0.5, "Maintained".to_string()),
+                BoundaryState::new("SD-CuD".to_string(), 0.7, "Transitional".to_string()),
+                BoundaryState::new("CuD-ED".to_string(), 0.85, "Transcendent".to_string()),
+            ],
+            identity: "Test Dual-LLM Identity".to_string(),
+        }
+    }
 
     #[test]
     fn test_llm1_prompt_construction() {
@@ -448,5 +469,241 @@ mod tests {
         let invalid_json = "This is not valid JSON";
         let result = processor.parse_and_validate(invalid_json);
         assert!(result.is_err());
+    }
+
+    /// INTEGRATION TEST 1: End-to-end LLM #1 call with FlowProcess
+    /// Validates that UnconscciousLlmProcessor integrates correctly with FlowContext
+    #[test]
+    fn test_integration_llm1_end_to_end_with_flow_context() {
+        use crate::flow_process::FlowContext;
+
+        // Create dual-LLM enabled config
+        let config = DualLlmConfig::enabled();
+
+        // Create MockLlm that returns valid LLM #1 recognition JSON
+        let mock_llm = Arc::new(crate::mock_llm::MockLlm::llm1_recognition());
+
+        // Create UnconscciousLlmProcessor
+        let processor = UnconscciousLlmProcessor::new(mock_llm.clone(), config);
+
+        // Create FlowContext with test input
+        let framework_state = create_test_framework_state();
+        let mut context = FlowContext::new(
+            "Explain quantum entanglement".to_string(),
+            0.7,
+            framework_state.clone(),
+        );
+
+        // Manually initialize boundaries (normally done by Stage 2: BoundaryDissolutionProcessor)
+        // For this integration test we just need the structure in place
+        context.boundaries = framework_state.boundaries.clone();
+
+        // Add required boundaries that LLM #1 will update
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "CD-SD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "CD-CuD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "CD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "SD-CuD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "SD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+        context
+            .boundaries
+            .push(crate::prompt_engine::BoundaryState::new(
+                "CuD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ));
+
+        // Process through LLM #1 processor
+        let result = processor.process(&mut context);
+
+        // Verify processing succeeded
+        assert!(result.is_ok(), "LLM #1 processing should succeed");
+
+        // Verify domain activations were updated from LLM #1 output
+        assert!(
+            context.domains.contains_key("CD"),
+            "CD domain should be present"
+        );
+        assert!(
+            context.domains.contains_key("SD"),
+            "SD domain should be present"
+        );
+        assert!(
+            context.domains.contains_key("CuD"),
+            "CuD domain should be present"
+        );
+        assert!(
+            context.domains.contains_key("ED"),
+            "ED domain should be present"
+        );
+
+        // Verify specific activation values match MockLlm response
+        assert_eq!(
+            context.domains.get("CD").unwrap().activation,
+            0.85,
+            "CD activation should match LLM #1 output"
+        );
+        assert_eq!(
+            context.domains.get("SD").unwrap().activation,
+            0.55,
+            "SD activation should match LLM #1 output"
+        );
+
+        // Verify boundary states were updated
+        let cd_sd_boundary = context
+            .boundaries
+            .iter()
+            .find(|b| b.name == "CD-SD")
+            .expect("CD-SD boundary should exist");
+        assert_eq!(
+            cd_sd_boundary.permeability, 0.72,
+            "CD-SD permeability should match LLM #1 output"
+        );
+        assert_eq!(
+            cd_sd_boundary.status, "Transitional",
+            "CD-SD status should match LLM #1 output"
+        );
+
+        // Verify pattern storage (should have 1 pattern from LLM #1 output)
+        assert_eq!(
+            context.patterns.len(),
+            1,
+            "Should have 1 pattern from LLM #1 output"
+        );
+        assert_eq!(
+            context.patterns[0].description, "Technical implementation inquiry pattern",
+            "Pattern description should match LLM #1 output"
+        );
+
+        // Verify MockLlm was actually called
+        assert_eq!(
+            mock_llm.call_count(),
+            1,
+            "MockLlm should have been called exactly once"
+        );
+    }
+
+    /// INTEGRATION TEST 2: Fallback to Rust on LLM #1 failure
+    /// Validates that system gracefully degrades to Rust calculators when LLM fails
+    #[test]
+    fn test_integration_llm1_fallback_on_timeout() {
+        use crate::flow_process::FlowContext;
+
+        // Create dual-LLM enabled config with fallback enabled
+        let mut config = DualLlmConfig::enabled();
+        config.fallback_enabled = true;
+        config.llm1_timeout_ms = 100; // Very short timeout
+        config.llm1_max_retries = 0; // No retries for faster test
+
+        // Create MockErrorLlm that simulates network timeout
+        let mock_error_llm = Arc::new(crate::mock_llm::MockErrorLlm::network_error());
+
+        // Create UnconscciousLlmProcessor with error-prone LLM
+        let processor = UnconscciousLlmProcessor::new(mock_error_llm, config);
+
+        // Create FlowContext
+        let framework_state = create_test_framework_state();
+        let mut context = FlowContext::new(
+            "Test fallback behavior".to_string(),
+            0.7,
+            framework_state.clone(),
+        );
+
+        // Initialize boundaries
+        context.boundaries = vec![
+            crate::prompt_engine::BoundaryState::new(
+                "CD-SD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "CD-CuD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+        ];
+
+        // Process through LLM #1 processor (should fallback to Rust)
+        let result = processor.process(&mut context);
+
+        // Verify processing succeeded despite LLM failure (thanks to fallback)
+        assert!(
+            result.is_ok(),
+            "Processing should succeed via Rust fallback"
+        );
+
+        // NOTE: We don't verify domain population here because that depends on
+        // the domain registry being properly configured, which is tested separately.
+        // The key test is that the fallback path executes without error.
+    }
+
+    /// INTEGRATION TEST 3: Feature flag disabled behavior
+    /// Validates that dual-LLM mode respects the enabled flag
+    #[test]
+    fn test_integration_feature_flag_disabled() {
+        use crate::flow_process::FlowContext;
+
+        // Create dual-LLM DISABLED config
+        let config = DualLlmConfig::disabled();
+
+        // Create MockLlm (should NOT be called)
+        let mock_llm = Arc::new(crate::mock_llm::MockLlm::llm1_recognition());
+
+        // Create UnconscciousLlmProcessor
+        let processor = UnconscciousLlmProcessor::new(mock_llm.clone(), config);
+
+        // Create FlowContext
+        let framework_state = create_test_framework_state();
+        let mut context = FlowContext::new(
+            "Test feature flag".to_string(),
+            0.7,
+            framework_state.clone(),
+        );
+
+        // Process through processor
+        let result = processor.process(&mut context);
+
+        // Verify processing succeeded
+        assert!(result.is_ok(), "Processing should succeed in classic mode");
+
+        // Verify MockLlm was NOT called (feature disabled, used Rust instead)
+        assert_eq!(
+            mock_llm.call_count(),
+            0,
+            "MockLlm should NOT be called when feature flag disabled"
+        );
+
+        // NOTE: We don't verify domain population here because that depends on
+        // the domain registry being properly configured, which is tested separately.
+        // The key test is that the feature flag correctly bypasses the LLM path.
     }
 }
