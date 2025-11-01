@@ -1,5 +1,6 @@
 mod autonomous_judgement;
 pub mod domains;
+pub mod dual_llm;
 mod flow_process;
 mod hlip_integration;
 pub mod llm_error;
