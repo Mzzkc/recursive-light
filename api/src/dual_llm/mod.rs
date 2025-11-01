@@ -10,7 +10,7 @@ pub mod types;
 
 // Re-exports for convenience
 pub use config::DualLlmConfig;
-pub use memory_tiering::{ConversationTurn, HotMemory, MemoryTierManager};
+pub use memory_tiering::{ConversationTurn, HotMemory, MemoryTierManager, WarmMemory};
 pub use processors::UnconscciousLlmProcessor;
 pub use prompts::{
     build_llm1_minimal_prompt, build_llm1_simplified_prompt, build_llm1_system_prompt,

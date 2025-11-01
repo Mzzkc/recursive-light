@@ -326,12 +326,17 @@ impl VifApi {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Phase 1A: Load hot memory (last 3-5 turns) - TODO: Use in LLM #2 context (Phase 2)
+        // Phase 1A/1B: Load hot memory (last 3-5 turns) - TODO: Use in LLM #2 context (Phase 2)
         let _hot_memory = self
             .memory_tier_manager
             .load_hot_memory(session_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        // Phase 1B: Warm memory available for on-demand loading
+        // Can load with: memory_tier_manager.load_warm_memory(session_id)
+        // Or search with: memory_tier_manager.search_warm_memory(session_id, keyword, limit)
+        // TODO: Integrate into LLM #2 context when user references earlier conversation (Phase 2)
 
         // Use AJM to determine autonomy level
         let autonomy = self.ajm.get_autonomy();

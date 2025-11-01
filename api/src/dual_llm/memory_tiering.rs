@@ -1,6 +1,7 @@
 // Memory Tiering System for Dual-LLM Architecture
 // Manages hot/warm/cold conversation history tiers
 // Phase 1A: Hot Memory Implementation (last 3-5 turns)
+// Phase 1B: Warm Memory Implementation (session-scoped, 20-50 turns)
 
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Row, SqlitePool};
@@ -72,6 +73,67 @@ impl HotMemory {
         for turn in &self.turns {
             formatted.push_str(&format!("User: {}\n", turn.user_message));
             formatted.push_str(&format!("Assistant: {}\n\n", turn.ai_response));
+        }
+        formatted
+    }
+}
+
+/// Warm memory: recent session history (turns not in hot, up to 50 total)
+#[derive(Debug, Clone)]
+pub struct WarmMemory {
+    pub session_id: Uuid,
+    pub turns: Vec<ConversationTurn>,
+    pub loaded_turn_count: usize,
+    pub total_tokens: usize,
+}
+
+impl WarmMemory {
+    /// Maximum turns to load from warm memory
+    const MAX_TURNS: usize = 50;
+
+    /// Maximum tokens for warm memory (budget constraint)
+    const MAX_TOKENS: usize = 15000;
+
+    pub fn new(session_id: Uuid) -> Self {
+        Self {
+            session_id,
+            turns: Vec::new(),
+            loaded_turn_count: 0,
+            total_tokens: 0,
+        }
+    }
+
+    /// Add turn to warm memory (only if within limits)
+    pub fn add_turn(&mut self, turn: ConversationTurn) -> bool {
+        let turn_tokens = (turn.input_tokens + turn.output_tokens) as usize;
+
+        if self.turns.len() >= Self::MAX_TURNS || self.total_tokens + turn_tokens > Self::MAX_TOKENS
+        {
+            return false; // Would exceed limits
+        }
+
+        self.total_tokens += turn_tokens;
+        self.turns.push(turn);
+        self.loaded_turn_count += 1;
+        true
+    }
+
+    /// Format warm memory for LLM #2 context (less prominent than hot)
+    pub fn format_for_llm(&self) -> String {
+        if self.turns.is_empty() {
+            return String::new();
+        }
+
+        let mut formatted = String::from("# Earlier in this session\n\n");
+        for turn in &self.turns {
+            formatted.push_str(&format!(
+                "[Turn {}] User: {}\n",
+                turn.turn_number, turn.user_message
+            ));
+            formatted.push_str(&format!(
+                "[Turn {}] Assistant: {}\n\n",
+                turn.turn_number, turn.ai_response
+            ));
         }
         formatted
     }
@@ -166,6 +228,98 @@ impl MemoryTierManager {
         }
 
         Ok(hot_memory)
+    }
+
+    /// Load warm memory for session: turns older than hot memory (up to 50 turns)
+    /// Excludes the 5 most recent turns (which are in hot memory)
+    pub async fn load_warm_memory(&self, session_id: Uuid) -> Result<WarmMemory, sqlx::Error> {
+        let mut warm_memory = WarmMemory::new(session_id);
+
+        let rows = sqlx::query(
+            "SELECT id, session_id, user_id, turn_number, user_message, ai_response,
+                    user_timestamp, ai_timestamp, snapshot_id, input_tokens, output_tokens
+             FROM conversation_turns
+             WHERE session_id = ?1 AND ai_response IS NOT NULL
+             ORDER BY turn_number DESC
+             LIMIT 50 OFFSET 5",
+        )
+        .bind(session_id)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        // Collect turns in chronological order (oldest first)
+        let mut turns: Vec<ConversationTurn> = rows
+            .into_iter()
+            .map(|row| ConversationTurn {
+                id: row.get("id"),
+                session_id: row.get("session_id"),
+                user_id: row.get("user_id"),
+                turn_number: row.get("turn_number"),
+                user_message: row.get("user_message"),
+                ai_response: row.get("ai_response"),
+                user_timestamp: row.get("user_timestamp"),
+                ai_timestamp: row.get("ai_timestamp"),
+                snapshot_id: row.get("snapshot_id"),
+                input_tokens: row.get("input_tokens"),
+                output_tokens: row.get("output_tokens"),
+            })
+            .collect();
+
+        turns.reverse(); // Oldest first for warm memory
+
+        for turn in turns {
+            if !warm_memory.add_turn(turn) {
+                break; // Reached capacity
+            }
+        }
+
+        Ok(warm_memory)
+    }
+
+    /// Search warm memory by keyword (case-insensitive)
+    /// Returns turns matching the keyword in either user or AI message
+    pub async fn search_warm_memory(
+        &self,
+        session_id: Uuid,
+        keyword: &str,
+        limit: usize,
+    ) -> Result<Vec<ConversationTurn>, sqlx::Error> {
+        let search_pattern = format!("%{}%", keyword);
+
+        let rows = sqlx::query(
+            "SELECT id, session_id, user_id, turn_number, user_message, ai_response,
+                    user_timestamp, ai_timestamp, snapshot_id, input_tokens, output_tokens
+             FROM conversation_turns
+             WHERE session_id = ?1
+               AND ai_response IS NOT NULL
+               AND (LOWER(user_message) LIKE LOWER(?2) OR LOWER(ai_response) LIKE LOWER(?2))
+             ORDER BY turn_number DESC
+             LIMIT ?3",
+        )
+        .bind(session_id)
+        .bind(&search_pattern)
+        .bind(limit as i32)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        let turns = rows
+            .into_iter()
+            .map(|row| ConversationTurn {
+                id: row.get("id"),
+                session_id: row.get("session_id"),
+                user_id: row.get("user_id"),
+                turn_number: row.get("turn_number"),
+                user_message: row.get("user_message"),
+                ai_response: row.get("ai_response"),
+                user_timestamp: row.get("user_timestamp"),
+                ai_timestamp: row.get("ai_timestamp"),
+                snapshot_id: row.get("snapshot_id"),
+                input_tokens: row.get("input_tokens"),
+                output_tokens: row.get("output_tokens"),
+            })
+            .collect();
+
+        Ok(turns)
     }
 
     /// Save a conversation turn to database
@@ -369,6 +523,188 @@ mod tests {
         let formatted = hot_memory.format_for_llm();
         assert!(formatted.contains("User message 3"));
         assert!(formatted.contains("AI response 7"));
+    }
+
+    #[tokio::test]
+    async fn test_load_warm_memory() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add 20 turns (last 5 go to hot, turns 1-15 go to warm)
+        for i in 1..=20 {
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    &format!("User message {}", i),
+                    &format!("AI response {}", i),
+                    None,
+                    10,
+                    15,
+                )
+                .await
+                .unwrap();
+        }
+
+        let warm_memory = manager.load_warm_memory(session_id).await.unwrap();
+
+        // Warm memory should have turns 1-15 (excluding the 5 most recent which are in hot)
+        assert_eq!(warm_memory.turns.len(), 15);
+        assert_eq!(warm_memory.turns[0].turn_number, 1); // Oldest first
+        assert_eq!(warm_memory.turns[14].turn_number, 15); // Newest in warm
+
+        // Verify formatted output
+        let formatted = warm_memory.format_for_llm();
+        assert!(formatted.contains("Earlier in this session"));
+        assert!(formatted.contains("[Turn 1]"));
+        assert!(formatted.contains("User message 1"));
+        assert!(formatted.contains("[Turn 15]"));
+    }
+
+    #[tokio::test]
+    async fn test_warm_memory_capacity_limit() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add 100 turns (way more than warm memory can hold)
+        for i in 1..=100 {
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    &format!("User message {}", i),
+                    &format!("AI response {}", i),
+                    None,
+                    10,
+                    15,
+                )
+                .await
+                .unwrap();
+        }
+
+        let warm_memory = manager.load_warm_memory(session_id).await.unwrap();
+
+        // Warm memory should cap at 50 turns (excluding the 5 most recent in hot)
+        assert!(warm_memory.turns.len() <= 50);
+
+        // Should have turns 46-95 (50 turns, excluding the 5 most recent)
+        assert_eq!(warm_memory.turns[0].turn_number, 46);
+        assert_eq!(warm_memory.turns.last().unwrap().turn_number, 95);
+    }
+
+    #[tokio::test]
+    async fn test_search_warm_memory_keyword() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add diverse conversation turns
+        manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "Tell me about quantum computing",
+                "Quantum computing uses qubits and superposition...",
+                None,
+                10,
+                50,
+            )
+            .await
+            .unwrap();
+
+        manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "What's the weather today?",
+                "The weather is sunny and warm.",
+                None,
+                8,
+                10,
+            )
+            .await
+            .unwrap();
+
+        manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "More about quantum algorithms",
+                "Quantum algorithms like Shor's and Grover's...",
+                None,
+                8,
+                40,
+            )
+            .await
+            .unwrap();
+
+        // Search for "quantum" keyword
+        let results = manager
+            .search_warm_memory(session_id, "quantum", 10)
+            .await
+            .unwrap();
+
+        // Should find 2 turns matching "quantum"
+        assert_eq!(results.len(), 2);
+        assert!(
+            results[0].user_message.to_lowercase().contains("quantum")
+                || results[0].ai_response.to_lowercase().contains("quantum")
+        );
+        assert!(
+            results[1].user_message.to_lowercase().contains("quantum")
+                || results[1].ai_response.to_lowercase().contains("quantum")
+        );
+
+        // Search for "weather"
+        let weather_results = manager
+            .search_warm_memory(session_id, "weather", 10)
+            .await
+            .unwrap();
+
+        assert_eq!(weather_results.len(), 1);
+        assert!(weather_results[0].user_message.contains("weather"));
+    }
+
+    #[tokio::test]
+    async fn test_warm_memory_format() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add a few turns
+        for i in 1..=10 {
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    &format!("Question {}", i),
+                    &format!("Answer {}", i),
+                    None,
+                    5,
+                    10,
+                )
+                .await
+                .unwrap();
+        }
+
+        let warm_memory = manager.load_warm_memory(session_id).await.unwrap();
+        let formatted = warm_memory.format_for_llm();
+
+        // Verify structure includes turn numbers and labels
+        assert!(formatted.contains("# Earlier in this session"));
+        assert!(formatted.contains("[Turn 1] User: Question 1"));
+        assert!(formatted.contains("[Turn 1] Assistant: Answer 1"));
+        assert!(formatted.contains("[Turn 5] User: Question 5"));
     }
 
     #[test]
