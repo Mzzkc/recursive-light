@@ -2,6 +2,7 @@
 // Manages hot/warm/cold conversation history tiers
 // Phase 1A: Hot Memory Implementation (last 3-5 turns)
 // Phase 1B: Warm Memory Implementation (session-scoped, 20-50 turns)
+// Phase 1C: Cold Memory Implementation (cross-session, all history)
 
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Row, SqlitePool};
@@ -133,6 +134,59 @@ impl WarmMemory {
             formatted.push_str(&format!(
                 "[Turn {}] Assistant: {}\n\n",
                 turn.turn_number, turn.ai_response
+            ));
+        }
+        formatted
+    }
+}
+
+/// Cold memory: long-term storage across all sessions
+#[derive(Debug, Clone)]
+pub struct ColdMemory {
+    pub user_id: Uuid,
+    pub turns: Vec<ConversationTurn>,
+    pub total_sessions: usize,
+    pub total_turns: usize,
+}
+
+impl ColdMemory {
+    /// Maximum turns to load from cold memory per query
+    const MAX_TURNS: usize = 100;
+
+    pub fn new(user_id: Uuid) -> Self {
+        Self {
+            user_id,
+            turns: Vec::new(),
+            total_sessions: 0,
+            total_turns: 0,
+        }
+    }
+
+    /// Add turn to cold memory
+    pub fn add_turn(&mut self, turn: ConversationTurn) {
+        self.turns.push(turn);
+        self.total_turns += 1;
+    }
+
+    /// Format cold memory for LLM #2 context (most condensed)
+    pub fn format_for_llm(&self) -> String {
+        if self.turns.is_empty() {
+            return String::new();
+        }
+
+        let mut formatted = String::from("# Past Conversations\n\n");
+        for turn in &self.turns {
+            formatted.push_str(&format!(
+                "[{} - Turn {}] User: {}\n",
+                turn.user_timestamp.split('T').next().unwrap_or(""),
+                turn.turn_number,
+                turn.user_message
+            ));
+            formatted.push_str(&format!(
+                "[{} - Turn {}] Assistant: {}\n\n",
+                turn.ai_timestamp.as_deref().unwrap_or(""),
+                turn.turn_number,
+                turn.ai_response
             ));
         }
         formatted
@@ -384,6 +438,181 @@ impl MemoryTierManager {
             .execute(&self.db_pool)
             .await?;
         Ok(())
+    }
+
+    /// Load cold memory for user: turns from completed sessions (memory_tier = 'cold')
+    /// Returns up to MAX_TURNS most recent cold turns across all user's sessions
+    pub async fn load_cold_memory(&self, user_id: Uuid) -> Result<ColdMemory, sqlx::Error> {
+        let mut cold_memory = ColdMemory::new(user_id);
+
+        // Get count of unique sessions with cold turns
+        let session_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(DISTINCT session_id) FROM conversation_turns
+             WHERE user_id = ?1 AND memory_tier = 'cold'",
+        )
+        .bind(user_id)
+        .fetch_one(&self.db_pool)
+        .await?;
+
+        cold_memory.total_sessions = session_count as usize;
+
+        // Load most recent cold turns (up to MAX_TURNS)
+        let rows = sqlx::query(
+            "SELECT id, session_id, user_id, turn_number, user_message, ai_response,
+                    user_timestamp, ai_timestamp, snapshot_id, input_tokens, output_tokens
+             FROM conversation_turns
+             WHERE user_id = ?1 AND memory_tier = 'cold' AND ai_response IS NOT NULL
+             ORDER BY created_at DESC
+             LIMIT ?2",
+        )
+        .bind(user_id)
+        .bind(ColdMemory::MAX_TURNS as i32)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        let mut turns: Vec<ConversationTurn> = rows
+            .into_iter()
+            .map(|row| ConversationTurn {
+                id: row.get("id"),
+                session_id: row.get("session_id"),
+                user_id: row.get("user_id"),
+                turn_number: row.get("turn_number"),
+                user_message: row.get("user_message"),
+                ai_response: row.get("ai_response"),
+                user_timestamp: row.get("user_timestamp"),
+                ai_timestamp: row.get("ai_timestamp"),
+                snapshot_id: row.get("snapshot_id"),
+                input_tokens: row.get("input_tokens"),
+                output_tokens: row.get("output_tokens"),
+            })
+            .collect();
+
+        turns.reverse(); // Oldest first for chronological reading
+
+        for turn in turns {
+            cold_memory.add_turn(turn);
+        }
+
+        Ok(cold_memory)
+    }
+
+    /// Update memory tier for a specific turn
+    pub async fn update_memory_tier(
+        &self,
+        turn_id: Uuid,
+        new_tier: &str,
+    ) -> Result<(), sqlx::Error> {
+        sqlx::query(
+            "UPDATE conversation_turns
+             SET memory_tier = ?1, tier_changed_at = datetime('now')
+             WHERE id = ?2",
+        )
+        .bind(new_tier)
+        .bind(turn_id)
+        .execute(&self.db_pool)
+        .await?;
+
+        // Record tier transition
+        sqlx::query(
+            "INSERT INTO memory_tier_transitions (id, turn_id, from_tier, to_tier, transitioned_at, reason)
+             SELECT ?1, ?2,
+                    (SELECT memory_tier FROM conversation_turns WHERE id = ?2),
+                    ?3,
+                    datetime('now'),
+                    'manual_transition'
+             FROM conversation_turns WHERE id = ?2 LIMIT 1",
+        )
+        .bind(Uuid::new_v4())
+        .bind(turn_id)
+        .bind(new_tier)
+        .execute(&self.db_pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Transition all warm memory from a session to cold (called on session end)
+    pub async fn transition_warm_to_cold(&self, session_id: Uuid) -> Result<usize, sqlx::Error> {
+        // Get all warm/hot turns from this session (excluding already cold)
+        let turn_ids: Vec<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM conversation_turns
+             WHERE session_id = ?1 AND memory_tier IN ('hot', 'warm')",
+        )
+        .bind(session_id)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        let count = turn_ids.len();
+
+        // Update all to cold
+        sqlx::query(
+            "UPDATE conversation_turns
+             SET memory_tier = 'cold', tier_changed_at = datetime('now')
+             WHERE session_id = ?1 AND memory_tier IN ('hot', 'warm')",
+        )
+        .bind(session_id)
+        .execute(&self.db_pool)
+        .await?;
+
+        // Record transitions
+        for turn_id in turn_ids {
+            sqlx::query(
+                "INSERT INTO memory_tier_transitions (id, turn_id, from_tier, to_tier, transitioned_at, reason)
+                 VALUES (?1, ?2, 'warm', 'cold', datetime('now'), 'session_end')",
+            )
+            .bind(Uuid::new_v4())
+            .bind(turn_id)
+            .execute(&self.db_pool)
+            .await?;
+        }
+
+        Ok(count)
+    }
+
+    /// Search cold memory by keyword across all sessions
+    pub async fn search_cold_memory(
+        &self,
+        user_id: Uuid,
+        keyword: &str,
+        limit: usize,
+    ) -> Result<Vec<ConversationTurn>, sqlx::Error> {
+        let search_pattern = format!("%{}%", keyword);
+
+        let rows = sqlx::query(
+            "SELECT id, session_id, user_id, turn_number, user_message, ai_response,
+                    user_timestamp, ai_timestamp, snapshot_id, input_tokens, output_tokens
+             FROM conversation_turns
+             WHERE user_id = ?1
+               AND memory_tier = 'cold'
+               AND ai_response IS NOT NULL
+               AND (LOWER(user_message) LIKE LOWER(?2) OR LOWER(ai_response) LIKE LOWER(?2))
+             ORDER BY created_at DESC
+             LIMIT ?3",
+        )
+        .bind(user_id)
+        .bind(&search_pattern)
+        .bind(limit as i32)
+        .fetch_all(&self.db_pool)
+        .await?;
+
+        let turns = rows
+            .into_iter()
+            .map(|row| ConversationTurn {
+                id: row.get("id"),
+                session_id: row.get("session_id"),
+                user_id: row.get("user_id"),
+                turn_number: row.get("turn_number"),
+                user_message: row.get("user_message"),
+                ai_response: row.get("ai_response"),
+                user_timestamp: row.get("user_timestamp"),
+                ai_timestamp: row.get("ai_timestamp"),
+                snapshot_id: row.get("snapshot_id"),
+                input_tokens: row.get("input_tokens"),
+                output_tokens: row.get("output_tokens"),
+            })
+            .collect();
+
+        Ok(turns)
     }
 }
 
@@ -759,5 +988,253 @@ mod tests {
         // get_or_create_session should create NEW session after ending
         let new_session_id = manager.get_or_create_session(user_id).await.unwrap();
         assert_ne!(session_id, new_session_id);
+    }
+
+    #[tokio::test]
+    async fn test_transition_warm_to_cold() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool.clone());
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add 10 turns
+        for i in 1..=10 {
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    &format!("Message {}", i),
+                    &format!("Response {}", i),
+                    None,
+                    10,
+                    15,
+                )
+                .await
+                .unwrap();
+        }
+
+        // End session and transition to cold
+        manager.end_session(session_id).await.unwrap();
+        let transitioned_count = manager.transition_warm_to_cold(session_id).await.unwrap();
+
+        // Should have transitioned all 10 turns
+        assert_eq!(transitioned_count, 10);
+
+        // Verify all turns are now in cold tier
+        let cold_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM conversation_turns WHERE session_id = ?1 AND memory_tier = 'cold'",
+        )
+        .bind(session_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        assert_eq!(cold_count, 10);
+    }
+
+    #[tokio::test]
+    async fn test_load_cold_memory_cross_session() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        // Create 3 sessions with turns
+        for session_num in 1..=3 {
+            let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+            // Add 5 turns per session
+            for turn_num in 1..=5 {
+                manager
+                    .save_conversation_turn(
+                        session_id,
+                        user_id,
+                        &format!("Session {} Turn {}", session_num, turn_num),
+                        &format!("Response {}-{}", session_num, turn_num),
+                        None,
+                        10,
+                        15,
+                    )
+                    .await
+                    .unwrap();
+            }
+
+            // End session and transition to cold
+            manager.end_session(session_id).await.unwrap();
+            manager.transition_warm_to_cold(session_id).await.unwrap();
+        }
+
+        // Load cold memory (should get turns from all 3 sessions)
+        let cold_memory = manager.load_cold_memory(user_id).await.unwrap();
+
+        // Should have 15 total turns (3 sessions × 5 turns)
+        assert_eq!(cold_memory.total_turns, 15);
+        assert_eq!(cold_memory.turns.len(), 15);
+
+        // Should have counted 3 sessions
+        assert_eq!(cold_memory.total_sessions, 3);
+
+        // Verify we have turns from all 3 sessions (not checking specific order due to timestamp precision)
+        let session_1_count = cold_memory
+            .turns
+            .iter()
+            .filter(|t| t.user_message.contains("Session 1"))
+            .count();
+        let session_2_count = cold_memory
+            .turns
+            .iter()
+            .filter(|t| t.user_message.contains("Session 2"))
+            .count();
+        let session_3_count = cold_memory
+            .turns
+            .iter()
+            .filter(|t| t.user_message.contains("Session 3"))
+            .count();
+
+        assert_eq!(session_1_count, 5);
+        assert_eq!(session_2_count, 5);
+        assert_eq!(session_3_count, 5);
+    }
+
+    #[tokio::test]
+    async fn test_search_cold_memory_cross_session() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        // Create 2 sessions
+        for _session_num in 1..=2 {
+            let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    "Tell me about quantum computing",
+                    "Quantum computing uses superposition...",
+                    None,
+                    10,
+                    50,
+                )
+                .await
+                .unwrap();
+
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    "What about classical computers?",
+                    "Classical computers use binary logic...",
+                    None,
+                    8,
+                    40,
+                )
+                .await
+                .unwrap();
+
+            manager.end_session(session_id).await.unwrap();
+            manager.transition_warm_to_cold(session_id).await.unwrap();
+        }
+
+        // Search for "quantum" across all sessions
+        let results = manager
+            .search_cold_memory(user_id, "quantum", 10)
+            .await
+            .unwrap();
+
+        // Should find 2 turns (one from each session)
+        assert_eq!(results.len(), 2);
+        assert!(
+            results[0].user_message.contains("quantum")
+                || results[0].ai_response.contains("quantum")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_update_memory_tier() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool.clone());
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        let turn_id = manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "Test message",
+                "Test response",
+                None,
+                10,
+                15,
+            )
+            .await
+            .unwrap();
+
+        // Initially in hot tier
+        let tier: String =
+            sqlx::query_scalar("SELECT memory_tier FROM conversation_turns WHERE id = ?1")
+                .bind(turn_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(tier, "hot");
+
+        // Update to warm
+        manager.update_memory_tier(turn_id, "warm").await.unwrap();
+
+        let tier: String =
+            sqlx::query_scalar("SELECT memory_tier FROM conversation_turns WHERE id = ?1")
+                .bind(turn_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(tier, "warm");
+
+        // Verify transition was recorded
+        let transition_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM memory_tier_transitions WHERE turn_id = ?1")
+                .bind(turn_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(transition_count, 1);
+    }
+
+    #[tokio::test]
+    async fn test_cold_memory_format() {
+        let pool = setup_test_db().await;
+        let user_id = create_test_user(&pool).await;
+        let manager = MemoryTierManager::new(pool);
+
+        let session_id = manager.get_or_create_session(user_id).await.unwrap();
+
+        // Add a few turns
+        for i in 1..=3 {
+            manager
+                .save_conversation_turn(
+                    session_id,
+                    user_id,
+                    &format!("Question {}", i),
+                    &format!("Answer {}", i),
+                    None,
+                    5,
+                    10,
+                )
+                .await
+                .unwrap();
+        }
+
+        manager.end_session(session_id).await.unwrap();
+        manager.transition_warm_to_cold(session_id).await.unwrap();
+
+        let cold_memory = manager.load_cold_memory(user_id).await.unwrap();
+        let formatted = cold_memory.format_for_llm();
+
+        // Verify structure includes dates and turn numbers
+        assert!(formatted.contains("# Past Conversations"));
+        assert!(formatted.contains("Turn 1"));
+        assert!(formatted.contains("Question 1"));
+        assert!(formatted.contains("Answer 3"));
     }
 }

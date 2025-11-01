@@ -333,10 +333,15 @@ impl VifApi {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Phase 1B: Warm memory available for on-demand loading
+        // Phase 1B: Warm memory available for on-demand loading (session-scoped)
         // Can load with: memory_tier_manager.load_warm_memory(session_id)
         // Or search with: memory_tier_manager.search_warm_memory(session_id, keyword, limit)
-        // TODO: Integrate into LLM #2 context when user references earlier conversation (Phase 2)
+
+        // Phase 1C: Cold memory available for cross-session retrieval
+        // Can load with: memory_tier_manager.load_cold_memory(user_id)
+        // Or search with: memory_tier_manager.search_cold_memory(user_id, keyword, limit)
+        // Tier transitions: memory_tier_manager.transition_warm_to_cold(session_id) on session end
+        // TODO: Integrate into LLM #2 context when user references past conversations (Phase 2)
 
         // Use AJM to determine autonomy level
         let autonomy = self.ajm.get_autonomy();
