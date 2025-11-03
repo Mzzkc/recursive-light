@@ -76,17 +76,23 @@
 - **Note:** Core algorithmic improvements (BM25, significance scoring) deferred to Phase 2D
 
 #### Phase 2D: Intelligent Ranking
-- **Status:** ✅ COMPLETE
+- **Status:** ✅ FUNCTIONALLY COMPLETE (⚠️ with significant tech debt)
 - **Tests:** 143 passing (all existing tests maintained)
-- **Commit:** [pending]
+- **Commit:** a3addcd
 - **Implementation:**
-  - TurnSignificance scoring system (6 dimensions)
+  - TurnSignificance scoring system (6 dimensions, 3 implemented)
   - BM25 ranking algorithm (Okapi BM25, k1=1.5, b=0.75)
   - Exponential temporal decay (λ=0.01)
   - Significance-weighted retrieval (50% recency, 35% semantic, 15% identity)
   - Integrated with warm/cold memory search
 - **Performance:** Relevance-ranked retrieval (vs chronological only)
-- **Note:** IDF simplified (Phase 3 will add corpus statistics for full BM25)
+- **Tech Debt:** See `TECH-DEBT-PHASE-2D.md` for detailed remediation plan
+  - 🔴 IDF hardcoded to 1.0 (should calculate from corpus)
+  - 🔴 avgdl hardcoded to 100 (should calculate from corpus)
+  - 🟡 No inverted index (linear scan, scales badly)
+  - 🟡 Simple tokenizer (no stemming, no stop words)
+  - 🟡 Identity criticality hardcoded to 0.5 (should check database)
+  - 🟡 3/6 TurnSignificance fields are stubs (emotional, factual, narrative)
 
 ### PARTIALLY IMPLEMENTED ⚠️
 
@@ -155,10 +161,12 @@ recursive-light/
 🚫 **None** - All dependencies resolved
 
 ### Needs Immediate Attention
-✅ **Phase 2 (A/B/C/D) COMPLETE - Ready for Phase 3**
-- Dual-LLM system fully operational
-- Intelligent memory retrieval with BM25 ranking
-- Foundation set for Phase 3 hybrid semantic retrieval
+⚠️ **Phase 2D Tech Debt Remediation Recommended Before Phase 3**
+- Dual-LLM system functional but has simplified BM25 implementation
+- See `TECH-DEBT-PHASE-2D.md` for 6 critical issues
+- Estimated remediation: 6-10 hours (use `bm25` crate + `rust-stemmers`)
+- **Option 1:** Fix tech debt now (recommended for production quality)
+- **Option 2:** Proceed to Phase 3, defer fixes (acceptable for MVP/prototype)
 
 ---
 
@@ -168,9 +176,19 @@ recursive-light/
 - None identified (all 143 tests passing)
 
 ### Technical Debt
-1. **Production API Keys:** Mock LLM used in tests, real keys needed for production
-2. **Semantic Search:** Current keyword search is basic, embeddings would improve recall
-3. **LLM-based Compression:** Warm→cold compression currently manual, could use LLM #1
+
+**Critical (Phase 2D):** See `TECH-DEBT-PHASE-2D.md` for full details
+1. **BM25 IDF:** Hardcoded to 1.0 (defeats purpose of BM25, should calculate from corpus)
+2. **BM25 avgdl:** Hardcoded to 100 tokens (incorrect length normalization)
+3. **No Inverted Index:** Linear scan O(n*m), should be O(m*log(n))
+4. **Tokenizer:** No stemming, no stop words, no punctuation handling
+5. **Identity Criticality:** Hardcoded 0.5, should query database
+6. **Significance Stubs:** 3/6 fields always 0.0 (emotional, factual, narrative)
+
+**Other:**
+7. **Production API Keys:** Mock LLM used in tests, real keys needed for production
+8. **Semantic Search:** Current keyword search is basic, embeddings would improve recall
+9. **LLM-based Compression:** Warm→cold compression currently manual, could use LLM #1
 
 ### Workarounds in Place
 - MockLlm provides testing without API costs
