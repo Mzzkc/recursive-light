@@ -1314,6 +1314,46 @@ impl FlowProcess {
         Self { stages }
     }
 
+    /// Create FlowProcess with dual-LLM configuration
+    /// When dual-LLM enabled, Stage 1 uses UnconscciousLlmProcessor instead of DomainEmergenceProcessor
+    ///
+    /// # Phase 2A Implementation Note
+    /// This method is fully implemented and tested. Integration into VifApi will be completed in Phase 2B
+    /// when LLM #1 provider creation is added. Currently tested via unit tests.
+    #[allow(dead_code)] // TODO Phase 2B: Remove when integrated into VifApi::new()
+    pub fn with_config(
+        config: crate::dual_llm::DualLlmConfig,
+        llm_provider: std::sync::Arc<dyn crate::LlmProvider + Send + Sync>,
+    ) -> Self {
+        use crate::dual_llm::UnconscciousLlmProcessor;
+
+        let stages: Vec<Box<dyn StageProcessor>> = if config.enabled {
+            // Dual-LLM mode: Replace Stage 1 with LLM #1 (Unconscious Recognition)
+            vec![
+                Box::new(UnconscciousLlmProcessor::new(llm_provider, config)),
+                // Stage 2 (BoundaryDissolutionProcessor) removed - LLM #1 handles both domain + boundary
+                Box::new(InterfaceAttentionProcessor),
+                Box::new(QualityEmergenceProcessor),
+                Box::new(IntegrationProcessor),
+                Box::new(ContinuityProcessor),
+                Box::new(EvolutionProcessor),
+            ]
+        } else {
+            // Classic mode: Use Rust processors
+            vec![
+                Box::new(DomainEmergenceProcessor),
+                Box::new(BoundaryDissolutionProcessor),
+                Box::new(InterfaceAttentionProcessor),
+                Box::new(QualityEmergenceProcessor),
+                Box::new(IntegrationProcessor),
+                Box::new(ContinuityProcessor),
+                Box::new(EvolutionProcessor),
+            ]
+        };
+
+        Self { stages }
+    }
+
     pub fn execute(&self, mut context: FlowContext) -> Result<FlowContext, FlowError> {
         for stage in &self.stages {
             stage
@@ -3873,6 +3913,125 @@ mod tests {
             retry_result.is_ok(),
             "Retry should succeed with valid FlowContext: {:?}",
             retry_result.err()
+        );
+    }
+
+    #[test]
+    fn test_flow_process_with_config_dual_llm_enabled() {
+        // GIVEN: Dual-LLM configuration with feature enabled
+        let config = crate::dual_llm::DualLlmConfig::enabled();
+        let mock_llm = std::sync::Arc::new(crate::mock_llm::MockLlm::llm1_recognition());
+
+        // WHEN: FlowProcess created with dual-LLM config
+        let flow_process = FlowProcess::with_config(config.clone(), mock_llm.clone());
+
+        // THEN: FlowProcess should be created successfully
+        // In dual-LLM mode, Stage 1 uses UnconscciousLlmProcessor instead of DomainEmergenceProcessor
+        // This is validated by checking the stage count (dual-LLM has 6 stages vs 7 in classic mode)
+        assert_eq!(
+            flow_process.stages.len(),
+            6,
+            "Dual-LLM mode should have 6 stages (LLM #1 handles both domain + boundary)"
+        );
+
+        // Verify the flow can execute with LLM #1 processor
+        let framework_state = create_test_framework_state();
+        let mut context = FlowContext::new(
+            "Test dual-LLM integration".to_string(),
+            0.7,
+            framework_state,
+        );
+
+        // Initialize boundaries for the test
+        context.boundaries = vec![
+            crate::prompt_engine::BoundaryState::new(
+                "CD-SD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "CD-CuD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "CD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "SD-CuD".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "SD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+            crate::prompt_engine::BoundaryState::new(
+                "CuD-ED".to_string(),
+                0.5,
+                "Maintained".to_string(),
+            ),
+        ];
+
+        let result = flow_process.execute(context);
+
+        // ASSERT: Flow execution succeeds with dual-LLM processor
+        assert!(
+            result.is_ok(),
+            "Dual-LLM FlowProcess should execute successfully: {:?}",
+            result.err()
+        );
+
+        let final_context = result.unwrap();
+
+        // Verify domains were populated by LLM #1
+        assert!(
+            !final_context.domains.is_empty(),
+            "LLM #1 should populate domain activations"
+        );
+        assert!(
+            final_context.domains.contains_key("CD"),
+            "CD domain should be recognized by LLM #1"
+        );
+
+        // Verify MockLlm was called by LLM #1 processor
+        assert_eq!(
+            mock_llm.call_count(),
+            1,
+            "LLM #1 should have been called exactly once"
+        );
+    }
+
+    #[test]
+    fn test_flow_process_with_config_classic_mode() {
+        // GIVEN: Dual-LLM configuration with feature DISABLED
+        let config = crate::dual_llm::DualLlmConfig::disabled();
+        let mock_llm = std::sync::Arc::new(crate::mock_llm::MockLlm::echo());
+
+        // WHEN: FlowProcess created with dual-LLM disabled
+        let flow_process = FlowProcess::with_config(config, mock_llm.clone());
+
+        // THEN: FlowProcess should use classic 7-stage flow
+        assert_eq!(
+            flow_process.stages.len(),
+            7,
+            "Classic mode should have 7 stages"
+        );
+
+        // Verify MockLlm is NOT called (classic mode uses Rust processors)
+        let framework_state = create_test_framework_state();
+        let context = FlowContext::new("Test classic mode".to_string(), 0.7, framework_state);
+
+        let result = flow_process.execute(context);
+
+        assert!(result.is_ok(), "Classic mode should execute successfully");
+        assert_eq!(
+            mock_llm.call_count(),
+            0,
+            "MockLlm should NOT be called in classic mode"
         );
     }
 }

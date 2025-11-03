@@ -302,6 +302,25 @@ impl VifApi {
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
 
+        // Load dual-LLM configuration from environment
+        let dual_llm_config = dual_llm::DualLlmConfig::from_env();
+
+        // Create FlowProcess based on dual-LLM configuration
+        // NOTE: For Phase 2A, dual-LLM mode requires creating a separate LLM provider for LLM #1
+        // In production, VifApi would be refactored to use Arc<dyn LlmProvider> instead of Box
+        // For now, dual-LLM defaults to disabled (classic mode) unless explicitly configured
+        let flow_process = if dual_llm_config.enabled {
+            // TODO Phase 2B: Create LLM #1 provider (GPT-3.5-turbo) from config
+            // For now, use classic mode even if enabled flag is set
+            // This will be completed in Phase 2B when we integrate LLM #1 provider creation
+            eprintln!(
+                "DUAL_LLM_MODE enabled but LLM #1 provider not yet configured - using classic mode"
+            );
+            FlowProcess::new()
+        } else {
+            FlowProcess::new()
+        };
+
         Ok(Self {
             provider,
             prompt_engine,
@@ -310,7 +329,7 @@ impl VifApi {
             token_optimizer,
             ajm,
             hlip_integration,
-            flow_process: FlowProcess::new(),
+            flow_process,
         })
     }
 
