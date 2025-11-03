@@ -1,6 +1,6 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-03T19:45:00-08:00*
-*Phase 2C: Intelligent Memory Retrieval COMPLETE*
+*Last Verified: 2025-11-03T23:30:00-08:00*
+*Phase 2D: COMPLETE + Wave 1-2 Technical Debt ELIMINATED*
 
 ## PROJECT OVERVIEW
 
@@ -76,8 +76,17 @@
 - **Note:** Core algorithmic improvements (BM25, significance scoring) deferred to Phase 2D
 
 #### Phase 2D: Intelligent Ranking
-- **Status:** ✅ FUNCTIONALLY COMPLETE (⚠️ with significant tech debt)
-- **Tests:** 143 passing (all existing tests maintained)
+- **Status:** ✅ COMPLETE + PRODUCTION HARDENED
+- **Tests:** 145 passing (143 original + 2 new error handling tests)
+- **Commits:** a3addcd (Phase 2D), 50a9e08 (tech debt doc), 32f0f2b + 5e8ddbf + e71c741 + 2257281 (Waves 1-2)
+
+**Wave 1-2 Technical Debt Remediation (COMPLETE):**
+- ✅ **BM25 Proper Implementation:** Integrated bm25 crate v2.3, proper IDF/avgdl from corpus, inverted index O(m*log(n))
+- ✅ **Identity Criticality DB Lookup:** Async batch checking with RwLock caching, proper 0.0/1.0 scoring
+- ✅ **Structured Logging:** Replaced all 10 eprintln! with tracing (warn!/debug!)
+- ✅ **Error Infrastructure:** miette v7 + thiserror v2 by Kat Marchán (they/them), 9 error variants
+- ✅ **Production Unwraps Eliminated:** Fixed 5 panic-inducing unwraps (JSON parsing, runtime creation)
+- ✅ **API Key Graceful Fallbacks:** TDF-aligned fallback with provider-specific env var detection
 - **Commit:** a3addcd
 - **Implementation:**
   - TurnSignificance scoring system (6 dimensions, 3 implemented)
