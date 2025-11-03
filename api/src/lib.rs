@@ -1,3 +1,4 @@
+pub mod api_error; // Wave 2: Proper error handling
 mod autonomous_judgement;
 pub mod domains;
 pub mod dual_llm;
