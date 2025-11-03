@@ -472,45 +472,71 @@ impl VifApi {
                 .take(3) // Use up to 3 keywords
                 .collect();
 
-            // Phase 2C: Sparse retrieval - search warm memory (current session)
-            // Retrieve BEST match only (quality over quantity)
+            // Phase 2D: BM25-ranked retrieval - search warm memory (current session)
+            // Retrieve and rank by significance (recency + semantic relevance + identity)
             for keyword in &search_keywords {
                 if let Ok(warm_turns) = self
                     .memory_tier_manager
-                    .search_warm_memory(session_id, keyword, 5)
+                    .search_warm_memory(session_id, keyword, 10)
                     .await
                 {
                     if !warm_turns.is_empty() && warm_context.is_empty() {
-                        // Select most recent turn only (highest recency score)
-                        let best_turn = &warm_turns[0];
-                        warm_context.push_str("# Earlier in this session:\n");
-                        warm_context.push_str(&format!(
-                            "User: {}\nAssistant: {}\n\n",
-                            best_turn.user_message, best_turn.ai_response
-                        ));
-                        break; // Found context, stop searching
+                        // Phase 2D: Rank by BM25 + temporal decay + significance
+                        let ranked_turns = self
+                            .memory_tier_manager
+                            .rank_turns_by_relevance(warm_turns, user_input);
+
+                        // Select BEST turn (highest combined significance)
+                        if let Some((best_turn, significance)) = ranked_turns.first() {
+                            warm_context.push_str("# Earlier in this session:\n");
+                            warm_context.push_str(&format!(
+                                "User: {}\nAssistant: {}\n\n",
+                                best_turn.user_message, best_turn.ai_response
+                            ));
+                            // Debug: Log significance score (remove in production)
+                            eprintln!(
+                                "[Phase 2D] Warm memory: score={:.3}, recency={:.3}, semantic={:.3}",
+                                significance.combined_score(),
+                                significance.recency_score,
+                                significance.semantic_relevance
+                            );
+                        }
+                        break; // Found best context, stop searching
                     }
                 }
             }
 
-            // Phase 2C: Sparse retrieval - search cold memory (past sessions)
-            // Retrieve BEST match only (quality over quantity)
+            // Phase 2D: BM25-ranked retrieval - search cold memory (past sessions)
+            // Retrieve and rank by significance (recency + semantic relevance + identity)
             for keyword in &search_keywords {
                 if let Ok(cold_turns) = self
                     .memory_tier_manager
-                    .search_cold_memory(user_id, keyword, 5)
+                    .search_cold_memory(user_id, keyword, 10)
                     .await
                 {
                     if !cold_turns.is_empty() && cold_context.is_empty() {
-                        // Select most recent turn only (highest recency score)
-                        let best_turn = &cold_turns[0];
-                        let time_ago = format_time_ago(&best_turn.user_timestamp);
-                        cold_context.push_str("# From previous sessions:\n");
-                        cold_context.push_str(&format!(
-                            "[{}] User: {}\nAssistant: {}\n\n",
-                            time_ago, best_turn.user_message, best_turn.ai_response
-                        ));
-                        break; // Found context, stop searching
+                        // Phase 2D: Rank by BM25 + temporal decay + significance
+                        let ranked_turns = self
+                            .memory_tier_manager
+                            .rank_turns_by_relevance(cold_turns, user_input);
+
+                        // Select BEST turn (highest combined significance)
+                        if let Some((best_turn, significance)) = ranked_turns.first() {
+                            let time_ago = format_time_ago(&best_turn.user_timestamp);
+                            cold_context.push_str("# From previous sessions:\n");
+                            cold_context.push_str(&format!(
+                                "[{}] User: {}\nAssistant: {}\n\n",
+                                time_ago, best_turn.user_message, best_turn.ai_response
+                            ));
+                            // Debug: Log significance score (remove in production)
+                            eprintln!(
+                                "[Phase 2D] Cold memory: score={:.3}, recency={:.3}, semantic={:.3}",
+                                significance.combined_score(),
+                                significance.recency_score,
+                                significance.semantic_relevance
+                            );
+                        }
+                        break; // Found best context, stop searching
                     }
                 }
             }

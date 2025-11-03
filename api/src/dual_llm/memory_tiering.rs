@@ -8,6 +8,38 @@ use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Row, SqlitePool};
 use std::collections::VecDeque;
 
+/// Phase 2D: Significance scoring for intelligent retrieval ranking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TurnSignificance {
+    pub recency_score: f32,        // Exponential temporal decay
+    pub semantic_relevance: f32,   // Keyword overlap with query
+    pub identity_criticality: f32, // Is this identity-forming? (0.0-1.0)
+    pub emotional_weight: f32,     // Sentiment/intensity (reserved for Phase 3)
+    pub factual_density: f32,      // Proper nouns, dates, facts (reserved for Phase 3)
+    pub narrative_importance: f32, // Milestone, decision point (reserved for Phase 3)
+}
+
+impl TurnSignificance {
+    /// Calculate combined significance score (weighted sum)
+    pub fn combined_score(&self) -> f32 {
+        // Phase 2D: Use implemented fields only
+        0.5 * self.recency_score + 0.35 * self.semantic_relevance + 0.15 * self.identity_criticality
+        // Phase 3 will add: + 0.10 * (emotional + factual + narrative)
+    }
+
+    /// Create default significance (lowest scores)
+    pub fn default_significance() -> Self {
+        Self {
+            recency_score: 0.0,
+            semantic_relevance: 0.0,
+            identity_criticality: 0.0,
+            emotional_weight: 0.0,
+            factual_density: 0.0,
+            narrative_importance: 0.0,
+        }
+    }
+}
+
 /// Conversation turn: one user message + AI response pair
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConversationTurn {
@@ -613,6 +645,131 @@ impl MemoryTierManager {
             .collect();
 
         Ok(turns)
+    }
+
+    /// Phase 2D: Rank conversation turns by BM25 + temporal decay + significance
+    pub fn rank_turns_by_relevance(
+        &self,
+        turns: Vec<ConversationTurn>,
+        query: &str,
+    ) -> Vec<(ConversationTurn, TurnSignificance)> {
+        let mut scored_turns: Vec<(ConversationTurn, TurnSignificance)> = turns
+            .into_iter()
+            .map(|turn| {
+                let significance = self.calculate_turn_significance(&turn, query);
+                (turn, significance)
+            })
+            .collect();
+
+        // Sort by combined significance score (descending)
+        scored_turns.sort_by(|a, b| {
+            b.1.combined_score()
+                .partial_cmp(&a.1.combined_score())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        scored_turns
+    }
+
+    /// Phase 2D: Calculate significance for a single turn
+    fn calculate_turn_significance(
+        &self,
+        turn: &ConversationTurn,
+        query: &str,
+    ) -> TurnSignificance {
+        // 1. Recency score (exponential temporal decay)
+        let recency_score = self.calculate_recency_score(&turn.user_timestamp);
+
+        // 2. Semantic relevance (BM25 scoring)
+        let semantic_relevance = self.calculate_bm25_score(turn, query);
+
+        // 3. Identity criticality (reserved for Phase 3 - use default 0.5)
+        let identity_criticality = 0.5; // TODO: Check snapshot.is_identity_critical
+
+        TurnSignificance {
+            recency_score,
+            semantic_relevance,
+            identity_criticality,
+            emotional_weight: 0.0,     // Reserved for Phase 3
+            factual_density: 0.0,      // Reserved for Phase 3
+            narrative_importance: 0.0, // Reserved for Phase 3
+        }
+    }
+
+    /// Phase 2D: Calculate recency score with exponential temporal decay
+    /// Formula: e^(-λ * days_ago) where λ = 0.01
+    fn calculate_recency_score(&self, timestamp_str: &str) -> f32 {
+        use chrono::{DateTime, Utc};
+
+        // Parse timestamp
+        let parsed = DateTime::parse_from_rfc3339(timestamp_str).or_else(|_| {
+            chrono::NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc).fixed_offset())
+        });
+
+        let timestamp = match parsed {
+            Ok(dt) => dt.with_timezone(&Utc),
+            Err(_) => return 0.5, // Fallback: medium recency
+        };
+
+        let now = Utc::now();
+        let duration = now.signed_duration_since(timestamp);
+        let days_ago = duration.num_days() as f32;
+
+        // Exponential decay: λ = 0.01 (COMP domain recommendation)
+        let lambda = 0.01;
+        (-lambda * days_ago).exp()
+    }
+
+    /// Phase 2D: BM25 scoring algorithm
+    /// Okapi BM25 with k1=1.5, b=0.75 (standard parameters)
+    fn calculate_bm25_score(&self, turn: &ConversationTurn, query: &str) -> f32 {
+        // BM25 parameters (COMP domain recommendations)
+        let k1 = 1.5;
+        let b = 0.75;
+
+        // Tokenize query and document
+        let query_terms = Self::tokenize(query);
+        let doc_text = format!("{} {}", turn.user_message, turn.ai_response);
+        let doc_terms = Self::tokenize(&doc_text);
+
+        // Calculate average document length (approximation: 100 tokens)
+        let avgdl = 100.0;
+        let doc_len = doc_terms.len() as f32;
+
+        // Calculate BM25 for each query term
+        let mut bm25_score = 0.0;
+
+        for query_term in &query_terms {
+            // Term frequency in document
+            let tf = doc_terms.iter().filter(|t| *t == query_term).count() as f32;
+
+            // IDF (inverse document frequency) - simplified: assume rare terms
+            // Full implementation would need corpus statistics (Phase 3)
+            let idf = 1.0; // Simplified: treat all terms as equally important
+
+            // BM25 formula
+            let numerator = tf * (k1 + 1.0);
+            let denominator = tf + k1 * (1.0 - b + b * (doc_len / avgdl));
+            bm25_score += idf * (numerator / denominator);
+        }
+
+        // Normalize to 0-1 range (max possible score ≈ number of query terms)
+        let max_possible = query_terms.len() as f32;
+        if max_possible > 0.0 {
+            (bm25_score / max_possible).min(1.0)
+        } else {
+            0.0
+        }
+    }
+
+    /// Phase 2D: Simple tokenizer (split, lowercase, filter short words)
+    fn tokenize(text: &str) -> Vec<String> {
+        text.to_lowercase()
+            .split_whitespace()
+            .filter(|word| word.len() > 2) // Filter very short words
+            .map(|s| s.to_string())
+            .collect()
     }
 }
 

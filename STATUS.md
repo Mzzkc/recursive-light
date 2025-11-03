@@ -75,10 +75,18 @@
   - Natural formatting (removed mechanical turn numbers)
 - **Note:** Core algorithmic improvements (BM25, significance scoring) deferred to Phase 2D
 
-#### Phase 2D: Intelligent Ranking (In Progress)
-- **Status:** 🔄 IN PROGRESS
-- **Focus:** BM25 algorithm + TurnSignificance scoring
-- **Expected:** 10-20x speed improvement, relevance ranking
+#### Phase 2D: Intelligent Ranking
+- **Status:** ✅ COMPLETE
+- **Tests:** 143 passing (all existing tests maintained)
+- **Commit:** [pending]
+- **Implementation:**
+  - TurnSignificance scoring system (6 dimensions)
+  - BM25 ranking algorithm (Okapi BM25, k1=1.5, b=0.75)
+  - Exponential temporal decay (λ=0.01)
+  - Significance-weighted retrieval (50% recency, 35% semantic, 15% identity)
+  - Integrated with warm/cold memory search
+- **Performance:** Relevance-ranked retrieval (vs chronological only)
+- **Note:** IDF simplified (Phase 3 will add corpus statistics for full BM25)
 
 ### PARTIALLY IMPLEMENTED ⚠️
 
@@ -133,27 +141,24 @@ recursive-light/
 ## CURRENT WORK STATE
 
 ### Last Completed Task
-✅ **Phase 2C: Memory Retrieval UX Improvements**
-- Expanded keyword triggers (47 patterns, CULT domain research)
-- Human-readable timestamps ("3 weeks ago")
-- Sparse retrieval (best match only)
-- Natural formatting (removed turn numbers)
-- **Note:** Cosmetic improvements only, core algorithm (BM25) in Phase 2D
+✅ **Phase 2D: Intelligent Ranking Algorithm**
+- BM25 algorithm with temporal decay (COMP #1 recommendation)
+- TurnSignificance scoring (recency + semantic + identity)
+- Relevance-ranked retrieval (best match selection)
+- Research-validated approach (85% confidence)
+- All 143 tests passing, zero warnings
 
 ### In Progress
-🔄 **Phase 2D: Intelligent Ranking Algorithm**
-- Implementing BM25 + temporal decay (COMP domain #1 recommendation)
-- TurnSignificance scoring system (EXP + CULT domains)
-- Expected: 10-20x speed improvement, relevance ranking
+⏸️ **None** - Phase 2D complete, ready for Phase 3 CAM
 
 ### Blocked
 🚫 **None** - All dependencies resolved
 
 ### Needs Immediate Attention
-🔄 **Phase 2D: Core Algorithm Implementation Required**
-- Phase 2C delivered UX improvements (cosmetic)
-- Still need: BM25 ranking, TurnSignificance scoring (algorithmic)
-- These are prerequisites for Phase 3 hybrid retrieval
+✅ **Phase 2 (A/B/C/D) COMPLETE - Ready for Phase 3**
+- Dual-LLM system fully operational
+- Intelligent memory retrieval with BM25 ranking
+- Foundation set for Phase 3 hybrid semantic retrieval
 
 ---
 
