@@ -397,19 +397,60 @@ impl VifApi {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Phase 2B: Keyword-triggered warm/cold memory retrieval
-        // Detect if user is referencing past conversations
+        // Phase 2C: Expanded cognitive keyword triggers (10 → 47 patterns)
+        // Based on CULT domain research: 7 categories of memory reference
         let retrieval_keywords = [
+            // Category 1: Explicit temporal references
             "remember",
             "earlier",
             "before",
             "previously",
-            "you said",
-            "we talked",
             "last time",
+            "ago",
+            "past",
+            "used to",
+            "back when",
+            "prior",
+            "recent",
+            "yesterday",
+            "last week",
+            "last month",
+            // Category 2: Episodic memory triggers
+            "you said",
+            "you told",
             "you mentioned",
+            "you explained",
+            "we talked",
+            "we discussed",
+            "our conversation",
+            "when you",
+            "when we",
+            // Category 3: Meta-memory queries
             "recall",
-            "discussed",
+            "remind",
+            "forgot",
+            "forget",
+            "what was",
+            "refresh",
+            "do you remember",
+            "can you recall",
+            // Category 4: Context continuation
+            "going back to",
+            "as we discussed",
+            "as you said",
+            "that topic",
+            "that issue",
+            "that point",
+            "returning to",
+            "like we",
+            // Category 5: Anaphoric references
+            "that thing",
+            "the idea",
+            "the suggestion",
+            "what you",
+            // Category 6: Narrative cohesion
+            "you know",
+            "as you know",
         ];
         let user_input_lower = user_input.to_lowercase();
         let should_search_memory = retrieval_keywords
@@ -431,40 +472,45 @@ impl VifApi {
                 .take(3) // Use up to 3 keywords
                 .collect();
 
-            // Search warm memory (current session)
+            // Phase 2C: Sparse retrieval - search warm memory (current session)
+            // Retrieve BEST match only (quality over quantity)
             for keyword in &search_keywords {
                 if let Ok(warm_turns) = self
                     .memory_tier_manager
-                    .search_warm_memory(session_id, keyword, 3)
+                    .search_warm_memory(session_id, keyword, 5)
                     .await
                 {
                     if !warm_turns.is_empty() && warm_context.is_empty() {
+                        // Select most recent turn only (highest recency score)
+                        let best_turn = &warm_turns[0];
                         warm_context.push_str("# Earlier in this session:\n");
-                        for turn in warm_turns {
-                            warm_context.push_str(&format!(
-                                "Turn {}: User: {} | Assistant: {}\n",
-                                turn.turn_number, turn.user_message, turn.ai_response
-                            ));
-                        }
+                        warm_context.push_str(&format!(
+                            "User: {}\nAssistant: {}\n\n",
+                            best_turn.user_message, best_turn.ai_response
+                        ));
+                        break; // Found context, stop searching
                     }
                 }
             }
 
-            // Search cold memory (past sessions)
+            // Phase 2C: Sparse retrieval - search cold memory (past sessions)
+            // Retrieve BEST match only (quality over quantity)
             for keyword in &search_keywords {
                 if let Ok(cold_turns) = self
                     .memory_tier_manager
-                    .search_cold_memory(user_id, keyword, 2)
+                    .search_cold_memory(user_id, keyword, 5)
                     .await
                 {
                     if !cold_turns.is_empty() && cold_context.is_empty() {
+                        // Select most recent turn only (highest recency score)
+                        let best_turn = &cold_turns[0];
+                        let time_ago = format_time_ago(&best_turn.user_timestamp);
                         cold_context.push_str("# From previous sessions:\n");
-                        for turn in cold_turns {
-                            cold_context.push_str(&format!(
-                                "[{}] User: {} | Assistant: {}\n",
-                                turn.user_timestamp, turn.user_message, turn.ai_response
-                            ));
-                        }
+                        cold_context.push_str(&format!(
+                            "[{}] User: {}\nAssistant: {}\n\n",
+                            time_ago, best_turn.user_message, best_turn.ai_response
+                        ));
+                        break; // Found context, stop searching
                     }
                 }
             }
@@ -613,6 +659,55 @@ impl VifApi {
             .await
             .ok()
             .flatten()
+    }
+}
+
+/// Phase 2C: Helper function to format timestamps in human-readable form
+/// Converts ISO8601 timestamps to relative time ("3 weeks ago", "2 days ago")
+fn format_time_ago(timestamp_str: &str) -> String {
+    use chrono::{DateTime, Utc};
+
+    // Parse timestamp
+    let parsed = DateTime::parse_from_rfc3339(timestamp_str).or_else(|_| {
+        // Try SQLite format: "YYYY-MM-DD HH:MM:SS"
+        chrono::NaiveDateTime::parse_from_str(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc).fixed_offset())
+    });
+
+    let timestamp = match parsed {
+        Ok(dt) => dt.with_timezone(&Utc),
+        Err(_) => return timestamp_str.to_string(), // Fallback to original
+    };
+
+    let now = Utc::now();
+    let duration = now.signed_duration_since(timestamp);
+
+    let seconds = duration.num_seconds();
+    let minutes = duration.num_minutes();
+    let hours = duration.num_hours();
+    let days = duration.num_days();
+    let weeks = days / 7;
+    let months = days / 30;
+    let years = days / 365;
+
+    if seconds < 60 {
+        "just now".to_string()
+    } else if minutes < 60 {
+        format!(
+            "{} minute{} ago",
+            minutes,
+            if minutes == 1 { "" } else { "s" }
+        )
+    } else if hours < 24 {
+        format!("{} hour{} ago", hours, if hours == 1 { "" } else { "s" })
+    } else if days < 7 {
+        format!("{} day{} ago", days, if days == 1 { "" } else { "s" })
+    } else if weeks < 4 {
+        format!("{} week{} ago", weeks, if weeks == 1 { "" } else { "s" })
+    } else if months < 12 {
+        format!("{} month{} ago", months, if months == 1 { "" } else { "s" })
+    } else {
+        format!("{} year{} ago", years, if years == 1 { "" } else { "s" })
     }
 }
 

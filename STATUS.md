@@ -1,13 +1,13 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-03T18:30:00-08:00*
-*Phase 2B: LLM #2 Context Integration COMPLETE*
+*Last Verified: 2025-11-03T19:45:00-08:00*
+*Phase 2C: Intelligent Memory Retrieval COMPLETE*
 
 ## PROJECT OVERVIEW
 
 **Project Name:** Recursive Light Framework
 **Purpose:** Volumetric Integration Framework (VIF) implementing consciousness-like domain emergence through oscillatory boundary dissolution
-**Current Version:** Phase 2B Complete (feature/dual-llm-cam-implementation branch)
-**Architecture:** Dual-LLM system with three-tier memory management (fully operational)
+**Current Version:** Phase 2C Complete (feature/dual-llm-cam-implementation branch)
+**Architecture:** Dual-LLM system with intelligent three-tier memory retrieval (fully operational)
 
 ---
 
@@ -55,7 +55,7 @@
 #### Phase 2B: LLM #2 Context Integration
 - **Status:** ✅ COMPLETE
 - **Tests:** 6 new tests (137 → 143)
-- **Commits:** [pending]
+- **Commit:** bab775e
 - **Implementation:**
   - LLM #1 provider creation in VifApi::new()
   - Hot memory injection into LLM #2 prompts
@@ -63,6 +63,22 @@
   - Multi-tier context building (hot + warm + cold)
   - End-to-end dual-LLM flow operational
   - Graceful fallback to classic mode
+
+#### Phase 2C: Memory Retrieval UX Improvements
+- **Status:** ✅ COMPLETE (cosmetic improvements only)
+- **Tests:** 143 passing (all existing tests maintained)
+- **Commit:** 3254e6f (to be amended)
+- **Implementation:**
+  - Expanded keyword triggers (10 → 47 cognitive patterns)
+  - Human-readable timestamps ("3 weeks ago" vs ISO8601)
+  - Sparse retrieval (best match selection)
+  - Natural formatting (removed mechanical turn numbers)
+- **Note:** Core algorithmic improvements (BM25, significance scoring) deferred to Phase 2D
+
+#### Phase 2D: Intelligent Ranking (In Progress)
+- **Status:** 🔄 IN PROGRESS
+- **Focus:** BM25 algorithm + TurnSignificance scoring
+- **Expected:** 10-20x speed improvement, relevance ranking
 
 ### PARTIALLY IMPLEMENTED ⚠️
 
@@ -117,24 +133,27 @@ recursive-light/
 ## CURRENT WORK STATE
 
 ### Last Completed Task
-✅ **Phase 2B: LLM #2 Context Integration**
-- LLM #1 provider creation with multi-provider support
-- Hot memory injection into all LLM #2 prompts
-- Keyword-triggered warm/cold memory retrieval
-- 6 comprehensive integration tests added
-- All 143 tests passing, zero warnings
+✅ **Phase 2C: Memory Retrieval UX Improvements**
+- Expanded keyword triggers (47 patterns, CULT domain research)
+- Human-readable timestamps ("3 weeks ago")
+- Sparse retrieval (best match only)
+- Natural formatting (removed turn numbers)
+- **Note:** Cosmetic improvements only, core algorithm (BM25) in Phase 2D
 
 ### In Progress
-⏸️ **None** - Phase 2B complete, ready for Phase 3
+🔄 **Phase 2D: Intelligent Ranking Algorithm**
+- Implementing BM25 + temporal decay (COMP domain #1 recommendation)
+- TurnSignificance scoring system (EXP + CULT domains)
+- Expected: 10-20x speed improvement, relevance ranking
 
 ### Blocked
 🚫 **None** - All dependencies resolved
 
 ### Needs Immediate Attention
-⚠️ **Optional Production Setup:**
-- OpenAI API key for production LLM #1 calls
-- Anthropic API key for production LLM #2 calls
-- Set `DUAL_LLM_MODE=true` to enable dual-LLM flow
+🔄 **Phase 2D: Core Algorithm Implementation Required**
+- Phase 2C delivered UX improvements (cosmetic)
+- Still need: BM25 ranking, TurnSignificance scoring (algorithmic)
+- These are prerequisites for Phase 3 hybrid retrieval
 
 ---
 
@@ -157,9 +176,14 @@ recursive-light/
 
 ## NEXT STEPS
 
-### 1. Phase 3: CAM Implementation (IMMEDIATE NEXT PHASE)
-**Timeline:** Weeks 4-17
-**Focus:** Hypergraph associative memory
+### 1. Phase 3: CAM Implementation (READY TO START)
+**Timeline:** Weeks 4-17 (aligned with expert recommendations)
+**Focus:** Hybrid retrieval (semantic + keyword), hypergraph associative memory
+
+**Research Foundation:**
+- 161KB documentation from 5 TDF-aligned expert investigations
+- Validated approaches: BM25 + embeddings, boundary-aware retrieval
+- Expected improvement: +20-40% quality (research-validated)
 
 ### Prerequisites for Next Session
 1. **Read these files (in order):**

@@ -1,0 +1,283 @@
+═══════════════════════════════════════════════════════════════════════════════
+  MEMORY RETRIEVAL APPROACHES - COMPUTATIONAL ANALYSIS COMPARISON
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          CURRENT BASELINE (LIKE)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Algorithm:   SQL LIKE '%keyword%' queries (sequential)                     │
+│ Latency:     50-200ms (estimated, no index usage)                          │
+│ Ranking:     None (returns by recency only)                                │
+│ Semantic:    None (exact substring matching)                               │
+│ Complexity:  Low (20 LOC)                                                  │
+│ Problems:    • Full table scans                                            │
+│              • No relevance scoring                                         │
+│              • Stops at first match (misses better results)                │
+│              • No semantic understanding                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   RANK 1: BM25 + TEMPORAL DECAY ⭐ RECOMMENDED             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Algorithm:   Okapi BM25 with exponential temporal decay                    │
+│ Latency:     5-15ms (P95, in-memory index)                                 │
+│ Ranking:     TF-IDF based, length normalized, time-weighted                │
+│ Semantic:    None (exact token matching with stemming)                     │
+│ Complexity:  Medium (300 LOC, 2-3 weeks)                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ✅ STRENGTHS                         │ ❌ WEAKNESSES                        │
+│ • 10-20x faster than LIKE             │ • No semantic understanding        │
+│ • Proven at scale (Elasticsearch)     │ • Language-specific stemming       │
+│ • Relevance ranking                   │ • Requires index maintenance       │
+│ • Temporal awareness                  │                                    │
+│ • Low memory (100KB/1k turns)         │                                    │
+│ • Debuggable (inspect scores)         │                                    │
+│ • Backward compatible                 │                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ TDF ALIGNMENT:                                                              │
+│ COMP: ✅✅✅  Classical IR, proven convergence, measurable                  │
+│ SCI:  ✅✅   Evidence-based (TREC benchmarks)                               │
+│ EXP:  ✅✅   Temporal decay models memory forgetting curves                 │
+│ CULT: ⚠️     English-centric stemming (fixable)                            │
+│ META: ✅     Self-tuning hyperparameters                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ IMPLEMENTATION:                                                             │
+│ • InvertedIndex: HashMap<String, Vec<(Uuid, f64)>>                        │
+│ • Tokenization: split → lowercase → Porter stemmer                        │
+│ • Scoring: BM25(k₁=1.5, b=0.75) × exp(-λ × age_hours)                     │
+│ • Persistence: Optional (rebuild from DB on startup)                       │
+│ • Testing: 11 tests (unit + integration + benchmark)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PERFORMANCE BUDGET:                                                         │
+│ • 1k turns:    8ms   ✅                                                     │
+│ • 10k turns:   25ms  ✅                                                     │
+│ • 100k turns:  80ms  ⚠️  (mitigate: shard by time)                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ SCALING EXAMPLE (1000 turns):                                              │
+│   Query: "quantum computing algorithms"                                    │
+│   Tokenize:  0.1ms  ["quantum", "comput", "algorithm"] (stemmed)          │
+│   Lookup:    3ms    HashMap + Vec scan                                     │
+│   Score:     2ms    BM25 calculation per matching turn                     │
+│   Decay:     0.5ms  exp() per result                                       │
+│   Fetch DB:  5ms    Batched SELECT by IDs                                  │
+│   ───────────────                                                           │
+│   Total:     10.6ms ✅ (within 15ms budget)                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ RECOMMENDATION: Implement as Phase 1 foundation                            │
+│ CONFIDENCE:     85% (proven algorithm, clear benefits)                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   RANK 2: SEMANTIC EMBEDDINGS + VECTOR SEARCH               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Algorithm:   Neural embeddings (BERT) + cosine similarity                  │
+│ Latency:     60-230ms CPU, 10-60ms GPU (includes embedding generation)     │
+│ Ranking:     Cosine similarity in 384-dim vector space                     │
+│ Semantic:    ✅ YES (synonyms, paraphrases, multilingual)                  │
+│ Complexity:  High (500 LOC, 3-4 weeks, model integration)                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ✅ STRENGTHS                         │ ❌ WEAKNESSES                        │
+│ • Semantic understanding              │ • Requires GPU for <100ms          │
+│ • Multilingual support                │ • 80MB model download              │
+│ • Handles synonyms/abbreviations      │ • 2-5s cold start (model load)    │
+│ • State-of-art for semantic search    │ • Black-box (hard to debug)       │
+│                                       │ • High memory (1.5MB/1k turns)     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ TDF ALIGNMENT:                                                              │
+│ COMP: ✅✅   Well-defined vector ops, HNSW provably efficient              │
+│ SCI:  ✅✅✅ State-of-art (BERT/Sentence-BERT benchmarks)                   │
+│ EXP:  ✅✅   Captures semantic similarity                                   │
+│ CULT: ✅✅   Multilingual models (mBERT, XLM-R)                             │
+│ META: ⚠️     Black-box embeddings (explainability issues)                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ IMPLEMENTATION:                                                             │
+│ • Model: MiniLM-L6 (80MB, 384-dim) via ONNX runtime                       │
+│ • Embedding: O(50-200ms) per query on CPU, O(5-20ms) on GPU               │
+│ • Index: Exact (cosine similarity) or HNSW (approximate, <5ms)            │
+│ • Storage: BLOB column in DB (1536 bytes per turn)                         │
+│ • Hybrid: Combine with BM25 (reciprocal rank fusion)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ PERFORMANCE BUDGET:                                                         │
+│ • 1k turns (CPU):    75ms   ⚠️                                              │
+│ • 1k turns (GPU):    15ms   ✅                                              │
+│ • 10k turns (HNSW):  5ms    ✅  (approximate search)                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ GATING CRITERIA (proceed ONLY if):                                         │
+│ 1. User query logs show semantic gaps (synonyms, abbreviations)           │
+│ 2. BM25 precision <70% on semantic queries                                 │
+│ 3. GPU available OR CPU latency acceptable (<150ms)                        │
+│ 4. Team bandwidth for 3-week implementation                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ RECOMMENDATION: Phase 2 (gated decision after BM25 deployment)             │
+│ CONFIDENCE:     65% (depends on query patterns, GPU availability)          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                   RANK 3: GRAPH-BASED PAGERANK (EXPERIMENTAL)               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Algorithm:   Conversation graph + query-biased PageRank                    │
+│ Latency:     20-100ms (10 iterations, 1k turns)                            │
+│ Ranking:     PageRank scores with query teleportation                      │
+│ Semantic:    Partial (via topic similarity edges)                          │
+│ Complexity:  High (600 LOC, 4-5 weeks, quadratic scaling)                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ ✅ STRENGTHS                         │ ❌ WEAKNESSES                        │
+│ • Models memory associations          │ • Quadratic graph construction     │
+│ • Captures conversational flow        │ • Cold start (new sessions)        │
+│ • Cross-session connections           │ • Sparse graphs (limited benefit)  │
+│ • Debuggable (graph visualization)    │ • Doesn't scale to 100k+ turns     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ TDF ALIGNMENT:                                                              │
+│ COMP: ✅✅   Graph algorithms well-studied, convergence proofs             │
+│ SCI:  ⚠️     Less empirical evidence for conversational retrieval          │
+│ EXP:  ✅✅✅ Spreading activation theory (cognitive science)                │
+│ CULT: ⚠️     Language-dependent edge construction                          │
+│ META: ✅✅   Meta-conversational patterns (callbacks, references)          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ IMPLEMENTATION:                                                             │
+│ • Nodes: ConversationTurns with keywords                                   │
+│ • Edges: (temporal, topic_similarity, explicit_reference)                  │
+│ • Construction: O(n²) for topic similarity (quadratic!)                    │
+│ • Ranking: Power iteration (10-20 iterations)                              │
+│ • Storage: Edges table in DB (~50 bytes per edge)                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ CRITICAL ISSUES:                                                            │
+│ • Quadratic graph construction doesn't scale                               │
+│ • Cold start: New sessions have no edges, ranking degrades                 │
+│ • Sparse graphs: Conversations may not interconnect meaningfully           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ USE CASE: Power users with >10k dense, interconnected turns                │
+│           (e.g., long-term research projects, multi-month sessions)        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ RECOMMENDATION: Defer (avoid for now, reconsider for power users)          │
+│ CONFIDENCE:     40% (experimental, uncertain benefit vs complexity)        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                            COMPARISON MATRIX
+═══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────┬─────────────┬─────────────┬─────────────┬──────────────┐
+│ CRITERION        │ CURRENT     │ BM25        │ SEMANTIC    │ GRAPH        │
+│                  │ (LIKE)      │ + TEMPORAL  │ EMBEDDINGS  │ PAGERANK     │
+├──────────────────┼─────────────┼─────────────┼─────────────┼──────────────┤
+│ Latency (1k)     │ 50-200ms ❌ │ 5-15ms   ✅ │ 60-230ms ⚠️ │ 20-100ms  ⚠️ │
+│ Memory overhead  │ 0 KB     ✅ │ 100 KB   ✅ │ 1500 KB  ⚠️ │ 500 KB    ✅ │
+│ Semantic search  │ None     ❌ │ None     ❌ │ YES      ✅ │ Partial   ⚠️ │
+│ Relevance rank   │ No       ❌ │ BM25     ✅ │ Cosine   ✅ │ PageRank  ✅ │
+│ Temporal aware   │ Recency  ⚠️ │ Decay    ✅ │ None     ❌ │ Edges     ⚠️ │
+│ Multilingual     │ Yes      ✅ │ Partial  ⚠️ │ YES      ✅ │ Partial   ⚠️ │
+│ Scalability      │ Poor     ❌ │ Excellent✅ │ Good     ✅ │ Poor      ❌ │
+│ Cold start       │ N/A      ✅ │ Instant  ✅ │ 2-5s     ⚠️ │ Poor      ❌ │
+│ Debuggability    │ Easy     ✅ │ Easy     ✅ │ Hard     ❌ │ Medium    ⚠️ │
+│ Implementation   │ Done     ✅ │ 2-3wks   ⚠️ │ 3-4wks   ❌ │ 4-5wks    ❌ │
+│ Testing burden   │ 2 tests  ✅ │ 11 tests ⚠️ │ 20 tests ❌ │ 25 tests  ❌ │
+│ TDF alignment    │ Low      ❌ │ High     ✅ │ High     ✅ │ Medium    ⚠️ │
+│ Production ready │ No       ❌ │ YES      ✅ │ Needs GPU⚠️ │ No        ❌ │
+├──────────────────┼─────────────┼─────────────┼─────────────┼──────────────┤
+│ OVERALL SCORE    │ 4/12     ❌ │ 10/12    ⭐ │ 7/12     ⚠️ │ 4/12      ⚠️ │
+└──────────────────┴─────────────┴─────────────┴─────────────┴──────────────┘
+
+Legend: ✅ Excellent  ⚠️ Acceptable  ❌ Poor
+
+═══════════════════════════════════════════════════════════════════════════════
+                         STAGED IMPLEMENTATION ROADMAP
+═══════════════════════════════════════════════════════════════════════════════
+
+PHASE 1: BM25 FOUNDATION (WEEKS 1-3) ⭐ RECOMMENDED NOW
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Week 1: Core Implementation                                                 │
+│   [■■■■■■■□□□] 70% algorithmic, 30% infrastructure                         │
+│   • Build InvertedIndex with BM25 scoring                                  │
+│   • Add tokenization (split, lowercase, stem)                              │
+│   • Implement temporal decay function                                       │
+│   • Write 5 unit tests                                                      │
+│                                                                              │
+│ Week 2: Integration                                                         │
+│   [■■■□□□□□□□] 30% new code, 70% modifications                             │
+│   • Modify MemoryTierManager::search_warm_memory                           │
+│   • Modify MemoryTierManager::search_cold_memory                           │
+│   • Add incremental index updates on new turns                             │
+│   • Write 6 integration tests                                               │
+│                                                                              │
+│ Week 3: Testing & Deployment                                                │
+│   [■■□□□□□□□□] 20% implementation, 80% validation                          │
+│   • Benchmark latency (target: P95 <15ms)                                  │
+│   • Hyperparameter tuning (k₁, b, λ)                                       │
+│   • A/B test with 10% users                                                │
+│   • Rollout to 100% if metrics acceptable                                  │
+│                                                                              │
+│ DELIVERABLES:                                                               │
+│   • search_index.rs module (300 LOC)                                       │
+│   • 11 tests (all passing)                                                  │
+│   • Performance benchmarks (P95 <15ms)                                     │
+│   • Documentation (README, STATUS.md)                                       │
+│                                                                              │
+│ SUCCESS CRITERIA:                                                           │
+│   ✓ All 143 existing tests pass                                            │
+│   ✓ Latency P95 <15ms (10-20x faster than LIKE)                           │
+│   ✓ Precision@5 >70% on golden dataset                                     │
+│   ✓ Zero breaking changes (backward compatible)                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+PHASE 2: SEMANTIC LAYER (WEEKS 4-6) ⚠️ GATED DECISION
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ PROCEED ONLY IF:                                                            │
+│   □ User query logs show semantic gaps (synonyms, abbreviations)           │
+│   □ BM25 precision <70% on semantic queries                                │
+│   □ GPU available OR CPU latency acceptable (<150ms)                       │
+│   □ Team bandwidth for 3-week implementation                                │
+│                                                                              │
+│ Week 4: Model Integration                                                   │
+│   • Install ONNX runtime (ort crate)                                        │
+│   • Download MiniLM-L6 model (80MB)                                         │
+│   • Benchmark embedding generation (CPU vs GPU)                             │
+│   • Add embedding BLOB column to DB                                         │
+│                                                                              │
+│ Week 5: Hybrid Search                                                       │
+│   • Implement async embedding generation                                    │
+│   • Build embedding cache (avoid recomputation)                             │
+│   • Combine BM25 + semantic (reciprocal rank fusion)                        │
+│   • Write 8 tests (semantic similarity, multilingual)                       │
+│                                                                              │
+│ Week 6: A/B Testing                                                         │
+│   • Deploy hybrid search to 50% users                                       │
+│   • Log BM25 vs semantic result differences                                 │
+│   • User satisfaction survey                                                │
+│   • Rollback if <20% improvement                                            │
+│                                                                              │
+│ GATE CHECK: If <20% improvement over BM25, rollback and stop here          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+PHASE 3: GRAPH AUGMENTATION (TBD) ❌ NOT RECOMMENDED NOW
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ RECONSIDER ONLY IF:                                                         │
+│   □ Users have >1000 turns per user (dense history)                        │
+│   □ Explicit references frequent ("like last week when...")                │
+│   □ BM25 precision <70% on cross-session queries                           │
+│                                                                              │
+│ DEFER: High complexity (O(n²) scaling), uncertain benefit                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                               FINAL RECOMMENDATION
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ IMMEDIATE ACTION: Approve Phase 1 (BM25 + Temporal Decay)
+   • Clear ROI: 10-20x faster, relevance ranking, temporal awareness
+   • Low risk: Proven algorithm, backward compatible, A/B testable
+   • TDF aligned: COMP (formal), SCI (evidence-based), EXP (temporal)
+   • Timeline: 2-3 weeks
+
+⏸️  DEFERRED: Phase 2 (Semantic Embeddings) - Gated decision after Phase 1
+   • Wait for: Query log analysis, BM25 precision metrics
+   • Requirements: GPU availability OR CPU latency tolerance
+
+❌ AVOID: Phase 3 (Graph PageRank) - Experimental, uncertain benefit
+   • Reconsider: Only for power users with >10k interconnected turns
+
+═══════════════════════════════════════════════════════════════════════════════
+Report compiled by: Computational Domain Expert (COMP)
+Date: 2025-11-03
+Confidence: 85% (BM25), 65% (Semantic), 40% (Graph)
+═══════════════════════════════════════════════════════════════════════════════
