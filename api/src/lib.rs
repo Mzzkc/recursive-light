@@ -324,13 +324,27 @@ impl VifApi {
                     ("openai", dual_llm_config.unconscious_model.as_str())
                 };
 
-            // Get API key from environment
-            let llm1_api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
-                warn!("OPENAI_API_KEY not set, dual-LLM will fail without MockLlm");
+            // Wave 2: Graceful API key handling with TDF alignment
+            // COMP: Check environment, SCI: Testable fallback, CULT: Clear messaging, EXP: Intuitive behavior
+            let api_key_var = match llm1_provider_name {
+                "openai" => "OPENAI_API_KEY",
+                "anthropic" => "ANTHROPIC_API_KEY",
+                "openrouter" => "OPENROUTER_API_KEY",
+                _ => "OPENAI_API_KEY", // Default
+            };
+
+            let llm1_api_key = std::env::var(api_key_var).unwrap_or_else(|_| {
+                warn!(
+                    provider = %llm1_provider_name,
+                    env_var = api_key_var,
+                    "API key not set - dual-LLM will fall back to Rust calculations. Set {} for full functionality.",
+                    api_key_var
+                );
                 String::new()
             });
 
-            // Create LLM #1 provider based on provider name
+            // If API key is empty, dual-LLM will gracefully fall back to Rust domain calculations
+            // This allows testing without API keys and provides clear failure modes
             let llm1_provider_arc: std::sync::Arc<dyn LlmProvider + Send + Sync> =
                 match llm1_provider_name {
                     "openai" => std::sync::Arc::new(OpenAiLlm::new(
@@ -348,7 +362,7 @@ impl VifApi {
                     _ => {
                         warn!(
                             provider = %llm1_provider_name,
-                            "Unsupported LLM #1 provider, falling back to classic mode"
+                            "Unsupported LLM #1 provider - falling back to classic mode (no dual-LLM)"
                         );
                         return Ok(Self {
                             provider,
