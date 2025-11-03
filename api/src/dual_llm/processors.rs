@@ -9,6 +9,8 @@ use crate::flow_process::{
 use crate::llm_error::LlmError;
 use crate::LlmProvider;
 use std::sync::Arc;
+// Wave 2: Proper logging
+use tracing::{debug, warn};
 
 /// LLM #1 Processor (Unconscious Recognizer)
 /// Calls LLM to recognize emergent domain activations and boundary states
@@ -177,10 +179,10 @@ Now analyze this input:"#,
                             return Ok(output);
                         }
                         Err(validation_err) => {
-                            eprintln!(
-                                "LLM #1 validation failed (attempt {}): {:?}",
-                                attempts + 1,
-                                validation_err
+                            warn!(
+                                attempt = attempts + 1,
+                                error = ?validation_err,
+                                "LLM #1 validation failed, retrying"
                             );
                             last_error = Some(LlmError::InvalidResponseFormat {
                                 field: "validation".to_string(),
@@ -191,10 +193,10 @@ Now analyze this input:"#,
                     }
                 }
                 Ok(Err(llm_err)) => {
-                    eprintln!(
-                        "LLM #1 call failed (attempt {}): {:?}",
-                        attempts + 1,
-                        llm_err
+                    warn!(
+                        attempt = attempts + 1,
+                        error = ?llm_err,
+                        "LLM #1 call failed, retrying"
                     );
                     last_error = Some(llm_err.clone());
 
@@ -204,10 +206,10 @@ Now analyze this input:"#,
                     }
                 }
                 Err(_timeout) => {
-                    eprintln!(
-                        "LLM #1 timeout (attempt {}, {}ms)",
-                        attempts + 1,
-                        timeout_ms
+                    warn!(
+                        attempt = attempts + 1,
+                        timeout_ms = timeout_ms,
+                        "LLM #1 request timed out, retrying"
                     );
                     last_error = Some(LlmError::NetworkError {
                         message: format!("LLM #1 timeout after {}ms", timeout_ms),
@@ -258,7 +260,7 @@ Now analyze this input:"#,
 
     /// Fallback to Rust domain calculator
     fn fallback_to_rust(&self, context: &mut FlowContext) -> Result<(), FlowError> {
-        eprintln!("Falling back to Rust domain calculations (LLM #1 failed or disabled)");
+        debug!("Falling back to Rust domain calculations (LLM #1 failed or disabled)");
         self.fallback_processor.process(context)
     }
 }
@@ -327,7 +329,7 @@ impl StageProcessor for UnconscciousLlmProcessor {
             }
             Err(e) if self.config.fallback_enabled => {
                 // Fallback to Rust calculations
-                eprintln!("LLM #1 failed, falling back to Rust: {:?}", e);
+                warn!(error = ?e, "LLM #1 failed, falling back to Rust calculations");
                 self.fallback_to_rust(context)
             }
             Err(e) => Err(FlowError::StageProcessingFailed {

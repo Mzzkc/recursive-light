@@ -16,6 +16,13 @@ dotenv = "0.15.0"
 sqlx = { version = "0.7", features = [ "any", "sqlite", "postgres", "runtime-tokio-rustls", "uuid", "chrono", "migrate" ] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# Wave 1: BM25 proper implementation
+bm25 = "2.3"
+# Wave 2: Proper logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+# Wave 3: Performance benchmarks
+criterion = { version = "0.5", features = ["html_reports"] }

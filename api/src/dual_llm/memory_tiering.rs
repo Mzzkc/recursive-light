@@ -7,6 +7,8 @@
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Row, SqlitePool};
 use std::collections::VecDeque;
+// Wave 1: Proper BM25 implementation
+use bm25::{Document, Language, SearchEngineBuilder};
 
 /// Phase 2D: Significance scoring for intelligent retrieval ranking
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -228,18 +230,30 @@ impl ColdMemory {
 /// Memory tier manager: manages hot/warm/cold conversation history
 pub struct MemoryTierManager {
     db_pool: SqlitePool,
+    // Wave 1: Cache for snapshot identity criticality to avoid repeated DB queries
+    identity_cache: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<Uuid, bool>>>,
 }
 
 impl MemoryTierManager {
     /// Create new MemoryTierManager with existing database pool
     pub fn new(db_pool: SqlitePool) -> Self {
-        Self { db_pool }
+        Self {
+            db_pool,
+            identity_cache: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+        }
     }
 
     /// Create new MemoryTierManager from database URL
     pub async fn from_url(database_url: &str) -> Result<Self, sqlx::Error> {
         let db_pool = SqlitePool::connect(database_url).await?;
-        Ok(Self { db_pool })
+        Ok(Self {
+            db_pool,
+            identity_cache: std::sync::Arc::new(tokio::sync::RwLock::new(
+                std::collections::HashMap::new(),
+            )),
+        })
     }
 
     /// Get or create active session for user
@@ -647,16 +661,144 @@ impl MemoryTierManager {
         Ok(turns)
     }
 
-    /// Phase 2D: Rank conversation turns by BM25 + temporal decay + significance
-    pub fn rank_turns_by_relevance(
+    /// Wave 1: Batch check identity criticality for multiple snapshots (with caching)
+    /// Returns HashMap of snapshot_id -> is_identity_critical
+    async fn batch_check_identity_criticality(
+        &self,
+        snapshot_ids: Vec<Uuid>,
+    ) -> Result<std::collections::HashMap<Uuid, bool>, sqlx::Error> {
+        let mut results = std::collections::HashMap::new();
+
+        if snapshot_ids.is_empty() {
+            return Ok(results);
+        }
+
+        // Check cache first
+        {
+            let cache = self.identity_cache.read().await;
+            for snapshot_id in &snapshot_ids {
+                if let Some(&is_critical) = cache.get(snapshot_id) {
+                    results.insert(*snapshot_id, is_critical);
+                }
+            }
+        }
+
+        // Find snapshot_ids not in cache
+        let uncached_ids: Vec<Uuid> = snapshot_ids
+            .into_iter()
+            .filter(|id| !results.contains_key(id))
+            .collect();
+
+        if !uncached_ids.is_empty() {
+            // Build query to check identity_anchors for all uncached snapshots
+            // A snapshot is identity-critical if identity_anchors is non-null and non-empty
+            let placeholders = uncached_ids
+                .iter()
+                .enumerate()
+                .map(|(i, _)| format!("?{}", i + 1))
+                .collect::<Vec<_>>()
+                .join(",");
+
+            let query_str = format!(
+                "SELECT id, identity_anchors FROM state_snapshots WHERE id IN ({})",
+                placeholders
+            );
+
+            let mut query = sqlx::query(&query_str);
+            for id in &uncached_ids {
+                query = query.bind(id);
+            }
+
+            let rows = query.fetch_all(&self.db_pool).await?;
+
+            // Update cache and results
+            let mut cache = self.identity_cache.write().await;
+            for row in rows {
+                let snapshot_id: Uuid = row.get("id");
+                let identity_anchors: Option<String> = row.get("identity_anchors");
+
+                // Identity critical if anchors exist and not empty/null
+                let is_critical = identity_anchors
+                    .map(|anchors| !anchors.is_empty() && anchors != "[]" && anchors != "null")
+                    .unwrap_or(false);
+
+                cache.insert(snapshot_id, is_critical);
+                results.insert(snapshot_id, is_critical);
+            }
+
+            // For snapshot_ids that weren't found in DB, mark as not critical
+            for id in uncached_ids {
+                results.entry(id).or_insert_with(|| {
+                    cache.insert(id, false);
+                    false
+                });
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Wave 1: Rank conversation turns by BM25 + temporal decay + significance
+    /// Now uses proper BM25 with IDF and avgdl calculations from corpus
+    /// AND proper identity criticality lookup from database
+    pub async fn rank_turns_by_relevance(
         &self,
         turns: Vec<ConversationTurn>,
         query: &str,
     ) -> Vec<(ConversationTurn, TurnSignificance)> {
+        if turns.is_empty() {
+            return Vec::new();
+        }
+
+        // Wave 1: Pre-fetch identity criticality for all snapshots
+        let snapshot_ids: Vec<Uuid> = turns.iter().filter_map(|turn| turn.snapshot_id).collect();
+
+        let identity_map = self
+            .batch_check_identity_criticality(snapshot_ids)
+            .await
+            .unwrap_or_default(); // Fallback to empty map on error
+
+        // Build BM25 search engine from corpus of turns
+        // Each turn becomes a document combining user message + AI response
+        let documents: Vec<Document<usize>> = turns
+            .iter()
+            .enumerate()
+            .map(|(idx, turn)| {
+                let contents = format!("{} {}", turn.user_message, turn.ai_response);
+                Document { id: idx, contents }
+            })
+            .collect();
+
+        // Build search engine with English language tokenization using with_documents
+        // This automatically calculates proper IDF and avgdl from the corpus
+        let search_engine =
+            SearchEngineBuilder::<usize>::with_documents(Language::English, documents).build();
+
+        // Query the search engine once for all turns
+        let search_results = search_engine.search(query, turns.len());
+
+        // Build a map of turn index -> BM25 score for fast lookup
+        let mut bm25_scores = std::collections::HashMap::new();
+        for result in search_results {
+            bm25_scores.insert(result.document.id, result.score);
+        }
+
+        // Calculate significance for each turn using proper BM25 scores and identity data
         let mut scored_turns: Vec<(ConversationTurn, TurnSignificance)> = turns
             .into_iter()
-            .map(|turn| {
-                let significance = self.calculate_turn_significance(&turn, query);
+            .enumerate()
+            .map(|(idx, turn)| {
+                // Get BM25 score from search results (0.0 if term not found)
+                let bm25_score = bm25_scores.get(&idx).copied().unwrap_or(0.0);
+
+                // Get identity criticality from pre-fetched data
+                let identity_critical = turn
+                    .snapshot_id
+                    .and_then(|id| identity_map.get(&id).copied())
+                    .unwrap_or(false);
+
+                let significance =
+                    self.calculate_turn_significance(&turn, bm25_score, identity_critical);
                 (turn, significance)
             })
             .collect();
@@ -671,20 +813,22 @@ impl MemoryTierManager {
         scored_turns
     }
 
-    /// Phase 2D: Calculate significance for a single turn
+    /// Wave 1: Calculate significance for a single turn using pre-computed data
     fn calculate_turn_significance(
         &self,
         turn: &ConversationTurn,
-        query: &str,
+        bm25_score: f32,
+        identity_critical: bool,
     ) -> TurnSignificance {
         // 1. Recency score (exponential temporal decay)
         let recency_score = self.calculate_recency_score(&turn.user_timestamp);
 
-        // 2. Semantic relevance (BM25 scoring)
-        let semantic_relevance = self.calculate_bm25_score(turn, query);
+        // 2. Semantic relevance (from proper BM25 with IDF and avgdl)
+        let semantic_relevance = bm25_score;
 
-        // 3. Identity criticality (reserved for Phase 3 - use default 0.5)
-        let identity_criticality = 0.5; // TODO: Check snapshot.is_identity_critical
+        // 3. Identity criticality (Wave 1: ✅ IMPLEMENTED - DB lookup with caching)
+        // 1.0 if identity-critical snapshot, 0.0 otherwise
+        let identity_criticality = if identity_critical { 1.0 } else { 0.0 };
 
         TurnSignificance {
             recency_score,
@@ -721,56 +865,13 @@ impl MemoryTierManager {
         (-lambda * days_ago).exp()
     }
 
-    /// Phase 2D: BM25 scoring algorithm
-    /// Okapi BM25 with k1=1.5, b=0.75 (standard parameters)
-    fn calculate_bm25_score(&self, turn: &ConversationTurn, query: &str) -> f32 {
-        // BM25 parameters (COMP domain recommendations)
-        let k1 = 1.5;
-        let b = 0.75;
-
-        // Tokenize query and document
-        let query_terms = Self::tokenize(query);
-        let doc_text = format!("{} {}", turn.user_message, turn.ai_response);
-        let doc_terms = Self::tokenize(&doc_text);
-
-        // Calculate average document length (approximation: 100 tokens)
-        let avgdl = 100.0;
-        let doc_len = doc_terms.len() as f32;
-
-        // Calculate BM25 for each query term
-        let mut bm25_score = 0.0;
-
-        for query_term in &query_terms {
-            // Term frequency in document
-            let tf = doc_terms.iter().filter(|t| *t == query_term).count() as f32;
-
-            // IDF (inverse document frequency) - simplified: assume rare terms
-            // Full implementation would need corpus statistics (Phase 3)
-            let idf = 1.0; // Simplified: treat all terms as equally important
-
-            // BM25 formula
-            let numerator = tf * (k1 + 1.0);
-            let denominator = tf + k1 * (1.0 - b + b * (doc_len / avgdl));
-            bm25_score += idf * (numerator / denominator);
-        }
-
-        // Normalize to 0-1 range (max possible score ≈ number of query terms)
-        let max_possible = query_terms.len() as f32;
-        if max_possible > 0.0 {
-            (bm25_score / max_possible).min(1.0)
-        } else {
-            0.0
-        }
-    }
-
-    /// Phase 2D: Simple tokenizer (split, lowercase, filter short words)
-    fn tokenize(text: &str) -> Vec<String> {
-        text.to_lowercase()
-            .split_whitespace()
-            .filter(|word| word.len() > 2) // Filter very short words
-            .map(|s| s.to_string())
-            .collect()
-    }
+    // Wave 1: Removed calculate_bm25_score and tokenize methods
+    // Now using proper BM25 implementation from bm25 crate in rank_turns_by_relevance
+    // This provides:
+    // - Proper IDF calculation from corpus statistics
+    // - Proper avgdl calculation from actual document lengths
+    // - Professional tokenization with stemming and stop word removal
+    // - O(m*log(n)) performance with inverted index
 }
 
 #[cfg(test)]

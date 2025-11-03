@@ -24,6 +24,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use token_optimization::TokenOptimizer;
 use uuid::Uuid;
+// Wave 2: Proper logging
+use tracing::{debug, warn};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIConfig {
@@ -323,7 +325,7 @@ impl VifApi {
 
             // Get API key from environment
             let llm1_api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
-                eprintln!("Warning: OPENAI_API_KEY not set, dual-LLM will fail without MockLlm");
+                warn!("OPENAI_API_KEY not set, dual-LLM will fail without MockLlm");
                 String::new()
             });
 
@@ -343,9 +345,9 @@ impl VifApi {
                         llm1_model_name.to_string(),
                     )),
                     _ => {
-                        eprintln!(
-                            "Unsupported LLM #1 provider: {} - falling back to classic mode",
-                            llm1_provider_name
+                        warn!(
+                            provider = %llm1_provider_name,
+                            "Unsupported LLM #1 provider, falling back to classic mode"
                         );
                         return Ok(Self {
                             provider,
@@ -481,10 +483,11 @@ impl VifApi {
                     .await
                 {
                     if !warm_turns.is_empty() && warm_context.is_empty() {
-                        // Phase 2D: Rank by BM25 + temporal decay + significance
+                        // Wave 1: Rank by BM25 + temporal decay + identity criticality
                         let ranked_turns = self
                             .memory_tier_manager
-                            .rank_turns_by_relevance(warm_turns, user_input);
+                            .rank_turns_by_relevance(warm_turns, user_input)
+                            .await;
 
                         // Select BEST turn (highest combined significance)
                         if let Some((best_turn, significance)) = ranked_turns.first() {
@@ -493,12 +496,14 @@ impl VifApi {
                                 "User: {}\nAssistant: {}\n\n",
                                 best_turn.user_message, best_turn.ai_response
                             ));
-                            // Debug: Log significance score (remove in production)
-                            eprintln!(
-                                "[Phase 2D] Warm memory: score={:.3}, recency={:.3}, semantic={:.3}",
-                                significance.combined_score(),
-                                significance.recency_score,
-                                significance.semantic_relevance
+                            // Wave 1: Log significance scores for monitoring
+                            debug!(
+                                memory_tier = "warm",
+                                combined_score = %significance.combined_score(),
+                                recency = %significance.recency_score,
+                                semantic = %significance.semantic_relevance,
+                                identity = %significance.identity_criticality,
+                                "Retrieved memory with significance scores"
                             );
                         }
                         break; // Found best context, stop searching
@@ -515,10 +520,11 @@ impl VifApi {
                     .await
                 {
                     if !cold_turns.is_empty() && cold_context.is_empty() {
-                        // Phase 2D: Rank by BM25 + temporal decay + significance
+                        // Wave 1: Rank by BM25 + temporal decay + identity criticality
                         let ranked_turns = self
                             .memory_tier_manager
-                            .rank_turns_by_relevance(cold_turns, user_input);
+                            .rank_turns_by_relevance(cold_turns, user_input)
+                            .await;
 
                         // Select BEST turn (highest combined significance)
                         if let Some((best_turn, significance)) = ranked_turns.first() {
@@ -528,12 +534,15 @@ impl VifApi {
                                 "[{}] User: {}\nAssistant: {}\n\n",
                                 time_ago, best_turn.user_message, best_turn.ai_response
                             ));
-                            // Debug: Log significance score (remove in production)
-                            eprintln!(
-                                "[Phase 2D] Cold memory: score={:.3}, recency={:.3}, semantic={:.3}",
-                                significance.combined_score(),
-                                significance.recency_score,
-                                significance.semantic_relevance
+                            // Wave 1: Log significance scores for monitoring
+                            debug!(
+                                memory_tier = "cold",
+                                combined_score = %significance.combined_score(),
+                                recency = %significance.recency_score,
+                                semantic = %significance.semantic_relevance,
+                                identity = %significance.identity_criticality,
+                                time_ago = %time_ago,
+                                "Retrieved memory with significance scores"
                             );
                         }
                         break; // Found best context, stop searching

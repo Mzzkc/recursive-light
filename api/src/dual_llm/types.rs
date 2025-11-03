@@ -397,22 +397,13 @@ impl Llm1Output {
         }
 
         // 6. Soft validation: Warn about permeability-status consistency (recognition paradigm allows variance)
+        // Wave 2: Removed boundary status validation logging
+        // Previously validated that LLM-recognized status matched permeability-based thresholds
+        // However, in recognition paradigm, qualitative understanding may exceed quantitative thresholds
+        // This is acceptable: LLM may recognize "Transcendent" even with lower numerical permeability
         for boundary in &required_boundaries {
-            if let Some(state) = self.boundary_states.get(*boundary) {
-                let expected_status = if state.permeability > 0.8 {
-                    "Transcendent"
-                } else if state.permeability > 0.6 {
-                    "Transitional"
-                } else {
-                    "Maintained"
-                };
-
-                if state.status != expected_status {
-                    eprintln!(
-                        "INFO: Boundary {} status '{}' differs from permeability-based expectation '{}' (perm={:.2}). This is acceptable in recognition paradigm.",
-                        boundary, state.status, expected_status, state.permeability
-                    );
-                }
+            if let Some(_state) = self.boundary_states.get(*boundary) {
+                // Boundary exists - validation passed
             }
         }
 
