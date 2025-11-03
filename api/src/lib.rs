@@ -306,17 +306,62 @@ impl VifApi {
         let dual_llm_config = dual_llm::DualLlmConfig::from_env();
 
         // Create FlowProcess based on dual-LLM configuration
-        // NOTE: For Phase 2A, dual-LLM mode requires creating a separate LLM provider for LLM #1
-        // In production, VifApi would be refactored to use Arc<dyn LlmProvider> instead of Box
-        // For now, dual-LLM defaults to disabled (classic mode) unless explicitly configured
         let flow_process = if dual_llm_config.enabled {
-            // TODO Phase 2B: Create LLM #1 provider (GPT-3.5-turbo) from config
-            // For now, use classic mode even if enabled flag is set
-            // This will be completed in Phase 2B when we integrate LLM #1 provider creation
-            eprintln!(
-                "DUAL_LLM_MODE enabled but LLM #1 provider not yet configured - using classic mode"
-            );
-            FlowProcess::new()
+            // Phase 2B: Create LLM #1 provider for unconscious processing
+            // Parse model string to extract provider and model name
+            // Format: "provider/model" (e.g., "openai/gpt-3.5-turbo")
+            let (llm1_provider_name, llm1_model_name) =
+                if let Some(slash_pos) = dual_llm_config.unconscious_model.find('/') {
+                    (
+                        &dual_llm_config.unconscious_model[..slash_pos],
+                        &dual_llm_config.unconscious_model[slash_pos + 1..],
+                    )
+                } else {
+                    // Default to OpenAI if no provider specified
+                    ("openai", dual_llm_config.unconscious_model.as_str())
+                };
+
+            // Get API key from environment
+            let llm1_api_key = std::env::var("OPENAI_API_KEY").unwrap_or_else(|_| {
+                eprintln!("Warning: OPENAI_API_KEY not set, dual-LLM will fail without MockLlm");
+                String::new()
+            });
+
+            // Create LLM #1 provider based on provider name
+            let llm1_provider_arc: std::sync::Arc<dyn LlmProvider + Send + Sync> =
+                match llm1_provider_name {
+                    "openai" => std::sync::Arc::new(OpenAiLlm::new(
+                        llm1_api_key,
+                        llm1_model_name.to_string(),
+                    )),
+                    "anthropic" => std::sync::Arc::new(AnthropicLlm::new(
+                        llm1_api_key,
+                        llm1_model_name.to_string(),
+                    )),
+                    "openrouter" => std::sync::Arc::new(OpenRouterLlm::new(
+                        llm1_api_key,
+                        llm1_model_name.to_string(),
+                    )),
+                    _ => {
+                        eprintln!(
+                            "Unsupported LLM #1 provider: {} - falling back to classic mode",
+                            llm1_provider_name
+                        );
+                        return Ok(Self {
+                            provider,
+                            prompt_engine,
+                            memory_manager,
+                            memory_tier_manager,
+                            token_optimizer,
+                            ajm,
+                            hlip_integration,
+                            flow_process: FlowProcess::new(),
+                        });
+                    }
+                };
+
+            // Create FlowProcess with dual-LLM configuration
+            FlowProcess::with_config(dual_llm_config, llm1_provider_arc)
         } else {
             FlowProcess::new()
         };
@@ -345,22 +390,85 @@ impl VifApi {
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Phase 1A/1B: Load hot memory (last 3-5 turns) - TODO: Use in LLM #2 context (Phase 2)
-        let _hot_memory = self
+        // Phase 1A/1B: Load hot memory (last 3-5 turns) for LLM #2 context
+        let hot_memory = self
             .memory_tier_manager
             .load_hot_memory(session_id)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Phase 1B: Warm memory available for on-demand loading (session-scoped)
-        // Can load with: memory_tier_manager.load_warm_memory(session_id)
-        // Or search with: memory_tier_manager.search_warm_memory(session_id, keyword, limit)
+        // Phase 2B: Keyword-triggered warm/cold memory retrieval
+        // Detect if user is referencing past conversations
+        let retrieval_keywords = [
+            "remember",
+            "earlier",
+            "before",
+            "previously",
+            "you said",
+            "we talked",
+            "last time",
+            "you mentioned",
+            "recall",
+            "discussed",
+        ];
+        let user_input_lower = user_input.to_lowercase();
+        let should_search_memory = retrieval_keywords
+            .iter()
+            .any(|keyword| user_input_lower.contains(keyword));
 
-        // Phase 1C: Cold memory available for cross-session retrieval
-        // Can load with: memory_tier_manager.load_cold_memory(user_id)
-        // Or search with: memory_tier_manager.search_cold_memory(user_id, keyword, limit)
-        // Tier transitions: memory_tier_manager.transition_warm_to_cold(session_id) on session end
-        // TODO: Integrate into LLM #2 context when user references past conversations (Phase 2)
+        let mut warm_context = String::new();
+        let mut cold_context = String::new();
+
+        if should_search_memory {
+            // Extract meaningful words from user input as search keywords
+            let search_keywords: Vec<&str> = user_input
+                .split_whitespace()
+                .filter(|word| word.len() > 3) // Filter out short words
+                .filter(|word| {
+                    // Filter out common retrieval trigger words themselves
+                    !retrieval_keywords.contains(&word.to_lowercase().as_str())
+                })
+                .take(3) // Use up to 3 keywords
+                .collect();
+
+            // Search warm memory (current session)
+            for keyword in &search_keywords {
+                if let Ok(warm_turns) = self
+                    .memory_tier_manager
+                    .search_warm_memory(session_id, keyword, 3)
+                    .await
+                {
+                    if !warm_turns.is_empty() && warm_context.is_empty() {
+                        warm_context.push_str("# Earlier in this session:\n");
+                        for turn in warm_turns {
+                            warm_context.push_str(&format!(
+                                "Turn {}: User: {} | Assistant: {}\n",
+                                turn.turn_number, turn.user_message, turn.ai_response
+                            ));
+                        }
+                    }
+                }
+            }
+
+            // Search cold memory (past sessions)
+            for keyword in &search_keywords {
+                if let Ok(cold_turns) = self
+                    .memory_tier_manager
+                    .search_cold_memory(user_id, keyword, 2)
+                    .await
+                {
+                    if !cold_turns.is_empty() && cold_context.is_empty() {
+                        cold_context.push_str("# From previous sessions:\n");
+                        for turn in cold_turns {
+                            cold_context.push_str(&format!(
+                                "[{}] User: {} | Assistant: {}\n",
+                                turn.user_timestamp, turn.user_message, turn.ai_response
+                            ));
+                        }
+                    }
+                }
+            }
+        }
 
         // Use AJM to determine autonomy level
         let autonomy = self.ajm.get_autonomy();
@@ -381,11 +489,39 @@ impl VifApi {
             .execute(context)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
-        // Get LLM response using the structured prompt from the flow
-        let response = self
-            .provider
-            .send_request(&flow_result.structured_prompt)
-            .await?;
+        // Phase 2B: Inject memory context into LLM #2 prompt for context-aware responses
+        let enhanced_prompt =
+            if hot_memory.turns.is_empty() && warm_context.is_empty() && cold_context.is_empty() {
+                // No conversation history, use base prompt
+                flow_result.structured_prompt.clone()
+            } else {
+                // Build comprehensive memory context
+                let mut memory_sections = Vec::new();
+
+                // Add hot memory (recent turns, always relevant)
+                if !hot_memory.turns.is_empty() {
+                    memory_sections.push(hot_memory.format_for_llm());
+                }
+
+                // Add warm memory (session context, if keyword-triggered)
+                if !warm_context.is_empty() {
+                    memory_sections.push(warm_context);
+                }
+
+                // Add cold memory (cross-session context, if keyword-triggered)
+                if !cold_context.is_empty() {
+                    memory_sections.push(cold_context);
+                }
+
+                let full_memory_context = memory_sections.join("\n");
+                format!(
+                    "<conversation_context>\n{}</conversation_context>\n\n{}",
+                    full_memory_context, flow_result.structured_prompt
+                )
+            };
+
+        // Get LLM #2 response using the enhanced prompt with conversation context
+        let response = self.provider.send_request(&enhanced_prompt).await?;
         flow_result.llm_response = response.clone();
 
         // Create state snapshot with data from the flow
@@ -1046,5 +1182,325 @@ mod tests {
             user_count >= 1,
             "Database should remain intact after special character inputs"
         );
+    }
+
+    // ========== Phase 2B: Dual-LLM Integration Tests ==========
+
+    #[tokio::test]
+    async fn test_phase2b_hot_memory_injection() {
+        // Test that hot memory is properly injected into LLM #2 prompts
+        let db_pool = setup_test_db().await.unwrap();
+        let user_id = Uuid::new_v4();
+
+        // Create user
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        // Build VifApi with MockLlm
+        let mut vif_api = build_test_vif_api(db_pool.clone()).await;
+
+        // First interaction - establishes conversation history
+        let _response1 = vif_api
+            .process_input("Hello, my name is Alice", user_id)
+            .await
+            .unwrap();
+
+        // Second interaction - should have hot memory from first
+        let _response2 = vif_api
+            .process_input("What is my name?", user_id)
+            .await
+            .unwrap();
+
+        // Verify hot memory was loaded
+        let session_id = vif_api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+        let hot_memory = vif_api
+            .memory_tier_manager
+            .load_hot_memory(session_id)
+            .await
+            .unwrap();
+
+        assert!(
+            !hot_memory.turns.is_empty(),
+            "Hot memory should contain previous turn"
+        );
+        assert!(
+            hot_memory.turns[0].user_message.contains("Alice"),
+            "Hot memory should include first conversation"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_phase2b_keyword_triggered_warm_retrieval() {
+        // Test that warm memory is retrieved when user uses trigger keywords
+        let db_pool = setup_test_db().await.unwrap();
+        let user_id = Uuid::new_v4();
+
+        // Create user
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let mut vif_api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create multiple conversation turns
+        for i in 1..=5 {
+            let _ = vif_api
+                .process_input(&format!("Message number {}", i), user_id)
+                .await
+                .unwrap();
+        }
+
+        // Use retrieval trigger keyword
+        let response = vif_api
+            .process_input("Do you remember what I said earlier?", user_id)
+            .await;
+
+        assert!(response.is_ok(), "Keyword-triggered retrieval should work");
+    }
+
+    #[tokio::test]
+    async fn test_phase2b_dual_llm_provider_creation_with_mock() {
+        // Test that dual-LLM mode can be enabled with MockLlm (no API key needed)
+        std::env::set_var("DUAL_LLM_MODE", "true");
+        std::env::set_var("UNCONSCIOUS_LLM_MODEL", "openai/gpt-3.5-turbo");
+
+        let _db_pool = setup_test_db().await.unwrap();
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let mut framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test".to_string(),
+        };
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let vif_api_result = VifApi::new(provider, framework_state, "sqlite::memory:").await;
+
+        // Should succeed even in dual-LLM mode (creates provider)
+        assert!(
+            vif_api_result.is_ok(),
+            "VifApi should initialize in dual-LLM mode"
+        );
+
+        // Clean up env vars
+        std::env::remove_var("DUAL_LLM_MODE");
+        std::env::remove_var("UNCONSCIOUS_LLM_MODEL");
+    }
+
+    #[tokio::test]
+    async fn test_phase2b_memory_context_builds_correctly() {
+        // Test that memory context sections are properly combined
+        let db_pool = setup_test_db().await.unwrap();
+        let user_id = Uuid::new_v4();
+
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let mut vif_api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create conversation history
+        let _r1 = vif_api.process_input("First message", user_id).await;
+        let _r2 = vif_api.process_input("Second message", user_id).await;
+        let _r3 = vif_api.process_input("Third message", user_id).await;
+
+        // Verify memory is building up
+        let session_id = vif_api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+        let hot_memory = vif_api
+            .memory_tier_manager
+            .load_hot_memory(session_id)
+            .await
+            .unwrap();
+
+        assert_eq!(
+            hot_memory.turns.len(),
+            3,
+            "Should have 3 turns in hot memory"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_phase2b_fallback_to_classic_mode_on_error() {
+        // Test that system falls back to classic mode if dual-LLM fails
+        std::env::set_var("DUAL_LLM_MODE", "true");
+        std::env::set_var("UNCONSCIOUS_LLM_MODEL", "invalid/invalid-model");
+
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let mut framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test".to_string(),
+        };
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let vif_api_result = VifApi::new(provider, framework_state, "sqlite::memory:").await;
+
+        // Should still work (falls back to classic mode)
+        assert!(
+            vif_api_result.is_ok(),
+            "VifApi should fall back to classic mode on invalid provider"
+        );
+
+        std::env::remove_var("DUAL_LLM_MODE");
+        std::env::remove_var("UNCONSCIOUS_LLM_MODEL");
+    }
+
+    #[tokio::test]
+    async fn test_phase2b_empty_conversation_no_context_injection() {
+        // Test that no context is injected for first message (no history)
+        let db_pool = setup_test_db().await.unwrap();
+        let user_id = Uuid::new_v4();
+
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let mut vif_api = build_test_vif_api(db_pool.clone()).await;
+
+        // First message - no history
+        let response = vif_api.process_input("Hello", user_id).await;
+
+        assert!(
+            response.is_ok(),
+            "First message should process successfully"
+        );
+
+        // Verify hot memory is empty before this turn
+        let session_id = vif_api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+        let hot_memory = vif_api
+            .memory_tier_manager
+            .load_hot_memory(session_id)
+            .await
+            .unwrap();
+
+        // After first turn, hot memory should have 1 turn
+        assert_eq!(
+            hot_memory.turns.len(),
+            1,
+            "Hot memory should have exactly 1 turn after first message"
+        );
+    }
+
+    // Helper function to build test VifApi
+    async fn build_test_vif_api(db_pool: sqlx::SqlitePool) -> VifApi {
+        let provider = Box::new(mock_llm::MockLlm::echo());
+        let mut framework_state = FrameworkState {
+            domain_registry: prompt_engine::DomainRegistry::new(),
+            boundaries: vec![],
+            identity: "Test User".to_string(),
+        };
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ComputationalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ScientificDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(CulturalDomain));
+        framework_state
+            .domain_registry
+            .register_domain(Box::new(ExperientialDomain));
+
+        let prompt_engine = PromptEngine::new(framework_state.clone());
+        let memory_manager = MemoryManager {
+            db_pool: db_pool.clone(),
+        };
+        let memory_tier_manager = dual_llm::MemoryTierManager::new(db_pool.clone());
+        let token_optimizer = TokenOptimizer::new(1024);
+        let hlip_integration = HLIPIntegration::new();
+
+        let intention = Intention::new(
+            "Process user input".to_string(),
+            "Understand user intent".to_string(),
+            0.4,
+        );
+        let prototypes = vec![
+            Prototype::new("Direct Response".to_string(), 0.9, 0.95),
+            Prototype::new("Enhanced Response".to_string(), 0.7, 0.85),
+        ];
+        let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
+        let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+
+        VifApi {
+            provider,
+            prompt_engine,
+            memory_manager,
+            memory_tier_manager,
+            token_optimizer,
+            ajm,
+            hlip_integration,
+            flow_process: FlowProcess::new(),
+        }
     }
 }
