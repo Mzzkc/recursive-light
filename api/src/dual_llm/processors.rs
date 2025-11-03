@@ -233,17 +233,32 @@ Now analyze this input:"#,
     }
 
     /// Parse LLM response and validate schema
+    /// Wave 2: Fixed unwrap() calls - now returns proper errors for malformed responses
     fn parse_and_validate(&self, response: &str) -> Result<Llm1Output, ValidationError> {
         // Try to extract JSON from markdown code blocks if present
         let json_str = if response.contains("```json") {
             // Extract from markdown code block
-            let start = response.find("```json").unwrap() + 7;
-            let end = response[start..].find("```").unwrap() + start;
+            let start = response.find("```json").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected ```json marker but not found".to_string(),
+                )
+            })? + 7;
+            let end = response[start..].find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected closing ``` marker but not found".to_string(),
+                )
+            })? + start;
             response[start..end].trim()
         } else if response.contains("```") {
             // Extract from generic code block
-            let start = response.find("```").unwrap() + 3;
-            let end = response[start..].find("```").unwrap() + start;
+            let start = response.find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation("Expected ``` marker but not found".to_string())
+            })? + 3;
+            let end = response[start..].find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected closing ``` marker but not found".to_string(),
+                )
+            })? + start;
             response[start..end].trim()
         } else {
             response.trim()
@@ -280,9 +295,13 @@ impl StageProcessor for UnconscciousLlmProcessor {
         let prompt = self.build_llm1_prompt(&context.user_input, None);
 
         // Call LLM #1 with retry logic (blocking on async)
-        let llm1_result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(self.call_llm1_with_retry(&prompt));
+        // Wave 2: Fixed unwrap() - tokio Runtime creation can fail (rare but possible)
+        let runtime =
+            tokio::runtime::Runtime::new().map_err(|e| FlowError::StageProcessingFailed {
+                stage: "LLM #1 Runtime Creation".to_string(),
+                reason: format!("Failed to create tokio runtime: {}", e),
+            })?;
+        let llm1_result = runtime.block_on(self.call_llm1_with_retry(&prompt));
 
         match llm1_result {
             Ok(llm1_output) => {
