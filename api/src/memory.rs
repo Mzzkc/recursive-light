@@ -2,14 +2,6 @@ use crate::prompt_engine::{BoundaryState, DomainState};
 
 use serde::{Deserialize, Serialize};
 use sqlx::{types::Uuid, Row, SqlitePool};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct StateSnapshot {
-    pub domains: Vec<DomainState>,
-    pub boundaries: Vec<BoundaryState>,
-    pub patterns: Vec<String>,
-}
-
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -11,9 +11,10 @@ tokio = { version = "1", features = ["full"] }
 async-trait = "0.1"
 bincode = "1.3"
 anyhow = "1.0"
-dotenv = "0.15.0"
+dotenvy = "0.15"
 # SQLx with SQLite support (and future PostgreSQL support)
-sqlx = { version = "0.7", features = [ "any", "sqlite", "postgres", "runtime-tokio-rustls", "uuid", "chrono", "migrate" ] }
+# Wave 4: Removed "any" feature to eliminate MySQL/rsa dependency (RUSTSEC-2023-0071)
+sqlx = { version = "0.8", features = [ "sqlite", "postgres", "runtime-tokio-rustls", "uuid", "chrono", "migrate" ] }
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 # Wave 1: BM25 proper implementation
@@ -29,3 +30,7 @@ thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 # Wave 3: Performance benchmarks
 criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "bm25_search"
+harness = false

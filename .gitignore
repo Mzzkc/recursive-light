@@ -34,3 +34,7 @@ __pycache__/
 .coordination-workspace/
 coordination-workspace/
 archive/
+
+# Documentation archives (historical value but not actively versioned)
+memory-bank/archives/
+design-docs/archives/

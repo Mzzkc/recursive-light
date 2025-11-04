@@ -1,6 +1,6 @@
 use api::prompt_engine::FrameworkState;
 use api::{prompt_engine, LlmConfig, LlmFactory, VifApi};
-use dotenv::dotenv;
+use dotenvy::dotenv;
 use uuid::Uuid;
 
 #[tokio::main]

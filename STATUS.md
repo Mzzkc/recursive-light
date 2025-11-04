@@ -1,6 +1,6 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-03T23:30:00-08:00*
-*Phase 2D: COMPLETE + Wave 1-2 Technical Debt ELIMINATED*
+*Last Verified: 2025-11-04T18:00:00-08:00*
+*Wave 4: COMPLETE - Security Hardening Complete, All Critical Tech Debt Eliminated*
 
 ## PROJECT OVERVIEW
 
@@ -87,6 +87,28 @@
 - ✅ **Error Infrastructure:** miette v7 + thiserror v2 by Kat Marchán (they/them), 9 error variants
 - ✅ **Production Unwraps Eliminated:** Fixed 5 panic-inducing unwraps (JSON parsing, runtime creation)
 - ✅ **API Key Graceful Fallbacks:** TDF-aligned fallback with provider-specific env var detection
+
+**Wave 3: Quality Metrics & Tooling (COMPLETE):**
+- ✅ **Dead Code Cleanup:** Removed 2 `#[allow(dead_code)]` attributes through proper TDF analysis
+  - **QualityCalculator.name():** RESTORED with structured logging (philosophical alignment: "you can't experience what you can't name")
+  - **StateSnapshot:** Removed (superseded by CompactStateSnapshot)
+- ✅ **BM25 Benchmarks:** Criterion benchmarks showing <100µs queries (100-5000 docs), HTML reports
+- ✅ **Coverage Metrics:** cargo-tarpaulin setup, 74.93% coverage (near 75% target), HTML report
+- ✅ **Security Audit:** cargo-audit scan, documented 2 vulnerabilities + 3 warnings in SECURITY-AUDIT-REPORT.md
+- ✅ **Documentation:** README.md created, inline docs verified, 1 TODO remaining (Phase 5 scope)
+- ✅ **Observability Infrastructure:** All 7 quality calculators now log calculations with tracing
+- **Performance Validated:** 5000 docs searchable in 79µs (well under 15ms P95 target)
+
+**Wave 4: Security Hardening (COMPLETE):**
+- ✅ **sqlx Upgrade:** 0.7.4 → 0.8.6 (RUSTSEC-2024-0363 ELIMINATED)
+- ✅ **dotenv Replacement:** dotenv → dotenvy (RUSTSEC-2021-0141 ELIMINATED)
+- ✅ **MySQL Driver Removed:** Removed "any" feature to eliminate unused MySQL dependencies
+- ✅ **paste Unmaintained:** ELIMINATED (resolved via sqlx upgrade)
+- ✅ **All 145 Tests Passing:** Zero regressions from dependency upgrades
+- ⚠️ **Acceptable Remaining Issues:**
+  - **rsa 0.9.8:** Compile-time only (sqlx-macros), not in runtime, no fix available, medium severity
+  - **fxhash:** Unmaintained warning (via bm25 crate), no vulnerability, monitoring for updates
+- **Result:** All critical and fixable vulnerabilities eliminated, production-ready security posture
 - **Commit:** a3addcd
 - **Implementation:**
   - TurnSignificance scoring system (6 dimensions, 3 implemented)
@@ -140,15 +162,21 @@ recursive-light/
 │   │   ├── memory.rs            # State snapshots
 │   │   └── lib.rs               # VifApi entry point
 │   └── migrations/              # 3 database migrations
-├── design-docs/                 # Architecture documentation
-├── memory-bank/                 # Context and session summaries
+├── memory-bank/                 # Project memory and context
+│   ├── activeContext.md         # Current state (read every session)
+│   ├── projectbrief.md          # Project overview
+│   ├── archives/                # Historical docs (gitignored)
+│   ├── context/                 # Framework concepts, tech context
+│   ├── designs/                 # Architecture & design docs
+│   └── sessions/                # Recent session summaries
 └── STATUS.md                    # This file
 ```
 
 ### Critical Dependencies
 - **tokio:** Async runtime
-- **sqlx:** Database access
+- **sqlx 0.8.6:** Database access (upgraded from 0.7.4 in Wave 4)
 - **serde/serde_json:** Serialization
+- **dotenvy:** Environment variables (replaced dotenv in Wave 4)
 - **Feature flags:** DUAL_LLM_MODE (defaults to false)
 
 ---
@@ -156,48 +184,50 @@ recursive-light/
 ## CURRENT WORK STATE
 
 ### Last Completed Task
-✅ **Phase 2D: Intelligent Ranking Algorithm**
-- BM25 algorithm with temporal decay (COMP #1 recommendation)
-- TurnSignificance scoring (recency + semantic + identity)
-- Relevance-ranked retrieval (best match selection)
-- Research-validated approach (85% confidence)
-- All 143 tests passing, zero warnings
+✅ **Wave 4: Security Hardening**
+- Upgraded sqlx 0.7.4 → 0.8.6 (RUSTSEC-2024-0363 ELIMINATED)
+- Replaced dotenv with dotenvy (RUSTSEC-2021-0141 ELIMINATED)
+- Removed MySQL driver (eliminated unused dependencies)
+- Verified all 145 tests passing with zero regressions
+- All critical and fixable vulnerabilities eliminated
+- Production-ready security posture achieved
+
+**Technical Details:**
+- sqlx upgrade completed cleanly (no breaking changes)
+- MySQL only present in compile-time macros (verified absent from runtime)
+- Remaining issues are acceptable risks (documented below)
 
 ### In Progress
-⏸️ **None** - Phase 2D complete, ready for Phase 3 CAM
+⏸️ **None** - All Waves 1-4 complete, ready for Phase 3 CAM
 
 ### Blocked
-🚫 **None** - All dependencies resolved
+🚫 **None** - All dependencies resolved, all critical tech debt eliminated
 
 ### Needs Immediate Attention
-⚠️ **Phase 2D Tech Debt Remediation Recommended Before Phase 3**
-- Dual-LLM system functional but has simplified BM25 implementation
-- See `TECH-DEBT-PHASE-2D.md` for 6 critical issues
-- Estimated remediation: 6-10 hours (use `bm25` crate + `rust-stemmers`)
-- **Option 1:** Fix tech debt now (recommended for production quality)
-- **Option 2:** Proceed to Phase 3, defer fixes (acceptable for MVP/prototype)
+✅ **None** - All critical security issues resolved
+- Wave 4 complete: Security hardening finished
+- Ready to proceed with Phase 3 CAM or production deployment
 
 ---
 
 ## KNOWN ISSUES AND TECHNICAL DEBT
 
 ### Current Issues
-- None identified (all 143 tests passing)
+- None identified (all 145 tests passing)
 
 ### Technical Debt
 
-**Critical (Phase 2D):** See `TECH-DEBT-PHASE-2D.md` for full details
-1. **BM25 IDF:** Hardcoded to 1.0 (defeats purpose of BM25, should calculate from corpus)
-2. **BM25 avgdl:** Hardcoded to 100 tokens (incorrect length normalization)
-3. **No Inverted Index:** Linear scan O(n*m), should be O(m*log(n))
-4. **Tokenizer:** No stemming, no stop words, no punctuation handling
-5. **Identity Criticality:** Hardcoded 0.5, should query database
-6. **Significance Stubs:** 3/6 fields always 0.0 (emotional, factual, narrative)
+**Security (Wave 4): ALL CRITICAL ITEMS ELIMINATED ✅**
+1. **✅ sqlx 0.7.4** - FIXED: Upgraded to 0.8.6 (RUSTSEC-2024-0363 eliminated)
+2. **✅ dotenv** - FIXED: Replaced with dotenvy (RUSTSEC-2021-0141 eliminated)
+3. **✅ paste** - FIXED: Eliminated via sqlx upgrade
+4. **⚠️ rsa 0.9.8** - ACCEPTABLE: Compile-time only (not runtime), no fix available, medium severity
+5. **⚠️ fxhash** - ACCEPTABLE: Via bm25 (needed for search), unmaintained warning only
 
-**Other:**
-7. **Production API Keys:** Mock LLM used in tests, real keys needed for production
-8. **Semantic Search:** Current keyword search is basic, embeddings would improve recall
-9. **LLM-based Compression:** Warm→cold compression currently manual, could use LLM #1
+**Deferred to Phase 3 (Not Security Issues):**
+6. **Significance Stubs:** 3/6 TurnSignificance fields (emotional, factual, narrative)
+7. **Semantic Search:** Embeddings would improve recall beyond BM25
+8. **LLM-based Compression:** Warm→cold compression currently manual
 
 ### Workarounds in Place
 - MockLlm provides testing without API costs
@@ -221,7 +251,7 @@ recursive-light/
 1. **Read these files (in order):**
    - `/home/emzi/Projects/recursive-light/STATUS.md` (this file)
    - `/home/emzi/Projects/recursive-light/memory-bank/activeContext.md`
-   - `/home/emzi/Projects/recursive-light/design-docs/dual-llm-implementation/`
+   - `/home/emzi/Projects/recursive-light/memory-bank/designs/dual-llm-implementation/`
 
 2. **Verify environment:**
    ```bash

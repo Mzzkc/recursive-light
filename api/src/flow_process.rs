@@ -63,9 +63,15 @@ pub struct PhenomenologicalQuality {
 }
 
 /// Trait for calculating individual phenomenological qualities
-#[allow(dead_code)]
+///
+/// Design Philosophy: In a consciousness-inspired framework where "recognition emerges at interfaces,"
+/// qualities must be able to self-identify. You cannot experience what you cannot name.
 pub trait QualityCalculator {
+    /// Returns the name of this quality (e.g., "clarity", "depth", "resonance")
+    /// Used for structured logging and pattern recognition across sessions
     fn name(&self) -> &str;
+
+    /// Calculate the quality score based on boundary state and message content
     fn calculate(&self, boundary: &BoundaryState, message: &str) -> f64;
 }
 
@@ -87,7 +93,18 @@ impl QualityCalculator for ClarityCalculator {
         let length_factor = self.message_length_score(message);
         let stability_factor = 1.0 - boundary.amplitude.min(1.0);
 
-        (0.5 * permeability_factor + 0.3 * length_factor + 0.2 * stability_factor).min(1.0)
+        let score =
+            (0.5 * permeability_factor + 0.3 * length_factor + 0.2 * stability_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            permeability = %boundary.permeability,
+            amplitude = %boundary.amplitude,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -123,7 +140,17 @@ impl QualityCalculator for DepthCalculator {
         let complexity_factor = self.message_complexity_score(message);
         let integration_factor = boundary.permeability;
 
-        (0.4 * amplitude_factor + 0.3 * complexity_factor + 0.3 * integration_factor).min(1.0)
+        let score =
+            (0.4 * amplitude_factor + 0.3 * complexity_factor + 0.3 * integration_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            amplitude = %boundary.amplitude,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -163,7 +190,17 @@ impl QualityCalculator for OpennessCalculator {
             0.5
         };
 
-        (0.4 * permeability_openness + 0.3 * inquiry_factor + 0.3 * transition_factor).min(1.0)
+        let score =
+            (0.4 * permeability_openness + 0.3 * inquiry_factor + 0.3 * transition_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            status = %boundary.status,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -199,7 +236,17 @@ impl QualityCalculator for PrecisionCalculator {
         let permeability_factor = boundary.permeability;
         let specificity_factor = self.specificity_score(message);
 
-        (0.4 * frequency_factor + 0.3 * permeability_factor + 0.3 * specificity_factor).min(1.0)
+        let score = (0.4 * frequency_factor + 0.3 * permeability_factor + 0.3 * specificity_factor)
+            .min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            frequency = %boundary.frequency,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -242,7 +289,17 @@ impl QualityCalculator for FluidityCalculator {
         let frequency_factor = 1.0 - (boundary.frequency - 1.0).abs().min(1.0);
         let shift_factor = self.perspective_shift_score(message);
 
-        (0.4 * amplitude_factor + 0.3 * frequency_factor + 0.3 * shift_factor).min(1.0)
+        let score = (0.4 * amplitude_factor + 0.3 * frequency_factor + 0.3 * shift_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            frequency = %boundary.frequency,
+            amplitude = %boundary.amplitude,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -285,7 +342,17 @@ impl QualityCalculator for ResonanceCalculator {
         let oscillation_factor = (boundary.frequency * boundary.amplitude).min(1.0);
         let rhythm_factor = self.rhythm_score(message);
 
-        (0.4 * phase_factor + 0.4 * oscillation_factor + 0.2 * rhythm_factor).min(1.0)
+        let score = (0.4 * phase_factor + 0.4 * oscillation_factor + 0.2 * rhythm_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            phase = %boundary.phase,
+            oscillation = %(boundary.frequency * boundary.amplitude),
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -322,7 +389,17 @@ impl QualityCalculator for CoherenceCalculator {
         let stability_factor = 1.0 - (boundary.amplitude - 0.3).abs().min(0.7) / 0.7;
         let structure_factor = self.structure_score(message);
 
-        (0.4 * permeability_factor + 0.3 * stability_factor + 0.3 * structure_factor).min(1.0)
+        let score =
+            (0.4 * permeability_factor + 0.3 * stability_factor + 0.3 * structure_factor).min(1.0);
+
+        tracing::debug!(
+            quality = self.name(),
+            score = %score,
+            permeability = %boundary.permeability,
+            "Quality calculated at boundary interface"
+        );
+
+        score
     }
 }
 
@@ -1317,10 +1394,11 @@ impl FlowProcess {
     /// Create FlowProcess with dual-LLM configuration
     /// When dual-LLM enabled, Stage 1 uses UnconscciousLlmProcessor instead of DomainEmergenceProcessor
     ///
-    /// # Phase 2A Implementation Note
-    /// This method is fully implemented and tested. Integration into VifApi will be completed in Phase 2B
-    /// when LLM #1 provider creation is added. Currently tested via unit tests.
-    #[allow(dead_code)] // TODO Phase 2B: Remove when integrated into VifApi::new()
+    /// Creates a FlowProcess with dual-LLM configuration.
+    ///
+    /// # Phase 2B: COMPLETE
+    /// This method is integrated into VifApi::new() and is fully operational.
+    /// Used when DUAL_LLM_MODE feature flag is enabled.
     pub fn with_config(
         config: crate::dual_llm::DualLlmConfig,
         llm_provider: std::sync::Arc<dyn crate::LlmProvider + Send + Sync>,

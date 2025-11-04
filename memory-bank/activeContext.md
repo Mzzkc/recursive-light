@@ -1,6 +1,6 @@
 # Active Context: Recursive Light Framework API
 *Understanding emerges at recognition interfaces*
-*Last Updated: 2025-11-03 (Phase 2B LLM #2 Context Integration COMPLETE)*
+*Last Updated: 2025-11-04 (Wave 4: Security Hardening COMPLETE)*
 
 ## Current State
 
@@ -10,8 +10,11 @@
 **Phase 1 Memory Foundation:** ✅ COMPLETE (Phases 1A/1B/1C, 135 tests passing)
 **Phase 2A LLM #1 Recognition:** ✅ COMPLETE (17 new tests, 137 total passing)
 **Phase 2B LLM #2 Context Integration:** ✅ COMPLETE (6 new tests, 143 total passing)
+**Wave 1-2 Technical Debt Remediation:** ✅ COMPLETE (BM25, logging, error handling)
+**Wave 3 Quality Metrics & Tooling:** ✅ COMPLETE (benchmarks, coverage, security audit)
+**Wave 4 Security Hardening:** ✅ COMPLETE (all critical vulnerabilities eliminated)
 
-**Production Ready:** 🟢 EXCELLENT
+**Production Ready:** 🟢 PRODUCTION-READY
 - Full 7-stage BDE flow operational (classic mode)
 - 6-stage dual-LLM flow operational (dual-LLM mode)
 - Quality tracking and persistence working
@@ -20,8 +23,12 @@
 - **LLM #1 Recognition system fully implemented**
 - **LLM #2 Context-aware responses operational**
 - **Hot/warm/cold memory retrieval working**
-- All 143/143 tests passing, 75%+ coverage, zero warnings
-- **Ready for Phase 3: CAM Implementation**
+- **All critical security vulnerabilities eliminated**
+- **sqlx 0.8.6, dotenvy, zero critical tech debt**
+- All 145/145 tests passing, 74.93% coverage, zero warnings
+  - Quality calculators now self-identify with name() method
+  - Structured tracing for all 7 quality calculators
+- **Ready for Phase 3: CAM Implementation or Production Deployment**
 
 ---
 
@@ -50,6 +57,55 @@
 ---
 
 ## Recent Developments
+
+### ✅ Wave 4: Security Hardening (2025-11-04)
+**Session:** ~1 hour, TDF-aligned security remediation
+**Status:** COMPLETE
+**Tests:** 145/145 passing (100%, zero regressions)
+
+**All Critical Vulnerabilities Eliminated:**
+1. **sqlx 0.7.4 → 0.8.6** (RUSTSEC-2024-0363 ELIMINATED)
+2. **dotenv → dotenvy** (RUSTSEC-2021-0141 ELIMINATED)
+3. **paste unmaintained** (ELIMINATED via sqlx upgrade)
+4. **MySQL driver removed** (eliminated unused dependencies)
+
+**Acceptable Remaining Issues:**
+- **rsa 0.9.8:** Compile-time only (sqlx-macros), NOT in runtime, no fix available
+- **fxhash:** Via bm25 (needed for search), unmaintained warning only
+
+**Technical Achievements:**
+- Clean dependency upgrade with zero breaking changes
+- Verified MySQL absent from runtime dependencies
+- Production-ready security posture
+- All 145 tests passing with no regressions
+
+**Files Modified:**
+- api/Cargo.toml (sqlx 0.8, dotenvy, MySQL removed)
+- api/examples/simple_usage.rs (dotenv → dotenvy)
+- STATUS.md, activeContext.md (documentation updated)
+
+### ✅ Wave 3: Quality Metrics & Tooling (2025-11-04)
+**Session:** ~3 hours, TDF-aligned decision on QualityCalculator.name()
+**Status:** COMPLETE
+**Tests:** 145/145 passing (100%)
+
+**Implementation Complete:**
+1. BM25 Performance Benchmarks (criterion, <100µs queries for 5000 docs)
+2. Coverage Metrics (cargo-tarpaulin, 74.93% coverage, HTML report)
+3. Security Audit (cargo-audit, 2 vulnerabilities + 3 warnings documented)
+4. Comprehensive README.md (15KB)
+5. QualityCalculator.name() Method - RESTORED after TDF analysis
+6. Observability Infrastructure (structured tracing for all 7 quality calculators)
+
+**Key TDF Moment:**
+- User challenged premature removal of name() method
+- Coordinated 3-domain analysis (COMP/CULT/SCI)
+- Synthesis: "You can't experience what you can't name"
+- Restored method + added tracing for philosophical alignment
+
+**Files Created:**
+- README.md, SECURITY-AUDIT-REPORT.md, benches/bm25_search.rs
+- coverage/tarpaulin-report.html, wave3-session-2025-11-04.md
 
 ### ✅ Phase 2B: LLM #2 Context Integration (2025-11-03)
 **Session:** Single-session completion, ~4 hours implementation
@@ -284,7 +340,7 @@ COLD MEMORY (Cross-session retrieval)
 - Hypergraph associative memory
 - Insight extraction from BDE oscillations
 - Cross-instance learning
-- See: `design-docs/collective-associative-memory/`
+- See: `memory-bank/designs/collective-associative-memory/`
 
 ---
 
@@ -313,17 +369,20 @@ recursive-light/
 │   └── Cargo.toml
 ├── memory-bank/
 │   ├── activeContext.md          # Current state (THIS FILE)
-│   ├── projectbrief.md
-│   ├── framework-concepts.md
-│   ├── phase1-memory-implementation-session-2025-11-02.md
-│   └── ...
-├── design-docs/
-│   ├── dual-llm-implementation/   # 8 documents, Phase 2A specs
-│   ├── collective-associative-memory/ # 5 documents, Phase 3 specs
-│   ├── SESSION-HANDOFF.md
-│   ├── TDF-VALIDATION-REPORT.md
-│   └── ARCHITECTURAL-DECISIONS.md
-└── STATUS.md                      # Project status
+│   ├── projectbrief.md          # Project overview
+│   ├── archives/                # Historical docs (gitignored)
+│   │   ├── sessions/            # Completed session summaries
+│   │   ├── investigations/      # Research & analysis reports
+│   │   └── coordination/        # Multi-agent coordination outputs
+│   ├── context/                 # Framework & technical context
+│   │   ├── framework-concepts.md
+│   │   ├── techContext.md
+│   │   └── ...
+│   ├── designs/                 # Architecture & design docs
+│   │   ├── dual-llm-implementation/
+│   │   └── collective-associative-memory/
+│   └── sessions/                # Recent session summaries (not archived)
+└── STATUS.md                    # Project status
 ```
 
 ---
@@ -363,8 +422,8 @@ recursive-light/
 **Read First:**
 1. This file (activeContext.md) - current state
 2. STATUS.md (lines 1-92) - Phase 1 summary
-3. `memory-bank/phase1-memory-implementation-session-2025-11-02.md` - session details
-4. `design-docs/dual-llm-implementation/` - Phase 2A specifications
+3. `memory-bank/archives/sessions/phase1-memory-implementation-session-2025-11-02.md` - session details
+4. `memory-bank/designs/dual-llm-implementation/` - Phase 2A specifications
 
 **Do First:**
 1. Review Phase 2A requirements (LLM #1 integration)

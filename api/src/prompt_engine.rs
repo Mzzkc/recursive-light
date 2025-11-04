@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn test_resonance_cascade_multi_boundary() {
         // Test that 3+ boundaries can synchronize if they have compatible parameters
-        let boundaries = vec![
+        let boundaries = [
             BoundaryState::with_oscillation(
                 "b1".to_string(),
                 0.5,
