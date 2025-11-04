@@ -1,6 +1,6 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-04T19:00:00-08:00*
-*Repository Cleanup: COMPLETE - Documentation Organized, Compressed, and Optimized*
+*Last Verified: 2025-11-04T21:00:00-08:00*
+*Phase 3 CAM: IN PROGRESS - Architecture pivoted to Qdrant + PostgreSQL*
 
 ## PROJECT OVERVIEW
 
@@ -140,12 +140,22 @@
 
 *None - All planned dual-LLM phases complete*
 
-### PLANNED BUT NOT STARTED 📋
+### IN PROGRESS ⏳
 
-#### Phase 3: Collective Associative Memory (CAM)
+#### Phase 3: Collective Associative Memory (CAM) - STARTED
 - **Timeline:** Weeks 4-17 (parallel to production)
-- **Design:** COMPLETE (5 docs, 168KB, 4185 lines)
-- **Components:** Hypergraph memory, insight extraction, cross-instance learning
+- **Design:** COMPLETE (5 docs, 168KB, 4185 lines - full version restored)
+- **Status:** Foundation laid (database schema, core types, storage layer)
+- **Architecture Decision:** **Pivoted to Qdrant + PostgreSQL hybrid** (from pgvector)
+  - Qdrant: Vector embeddings, semantic search (purpose-built, 2-10x faster)
+  - PostgreSQL: Hypergraph metadata, validations, provenance
+  - OpenAI ada-002: Real embeddings (no mocks/stubs)
+- **Components Completed:**
+  - ✅ Database migration (4 tables, functions, views)
+  - ✅ Core Rust types (Insight, Hyperedge, CAMQuery, CAMError)
+  - ✅ CAMStorage (PostgreSQL operations)
+  - ✅ Qdrant client dependency added
+- **Next:** Qdrant integration, OpenAI embeddings, insight extraction
 
 ---
 
@@ -195,7 +205,7 @@ recursive-light/
 ## CURRENT WORK STATE
 
 ### Last Completed Task
-✅ **Wave 4: Security Hardening**
+✅ **Phase 3 CAM Foundation + Architectural Decision**
 - Upgraded sqlx 0.7.4 → 0.8.6 (RUSTSEC-2024-0363 ELIMINATED)
 - Replaced dotenv with dotenvy (RUSTSEC-2021-0141 ELIMINATED)
 - Removed MySQL driver (eliminated unused dependencies)
@@ -209,7 +219,7 @@ recursive-light/
 - Remaining issues are acceptable risks (documented below)
 
 ### In Progress
-⏸️ **None** - All Waves 1-4 complete, ready for Phase 3 CAM
+🔄 **Phase 3 CAM** - Foundation complete, implementing Qdrant integration + OpenAI embeddings
 
 ### Blocked
 🚫 **None** - All dependencies resolved, all critical tech debt eliminated

@@ -25,6 +25,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Wave 2: Proper error handling (by Kat Marchán, they/them)
 miette = { version = "7", features = ["fancy"] }
 thiserror = "2.0"
+# Phase 3: CAM system
+qdrant-client = "1.11"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

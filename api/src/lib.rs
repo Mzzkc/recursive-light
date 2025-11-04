@@ -1,5 +1,6 @@
 pub mod api_error; // Wave 2: Proper error handling
 mod autonomous_judgement;
+pub mod cam; // Phase 3: Collective Associative Memory
 pub mod domains;
 pub mod dual_llm;
 mod flow_process;
