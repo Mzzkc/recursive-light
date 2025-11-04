@@ -12,6 +12,15 @@ PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), 
 **LongTerm(P3-CAM):** w4-17(||prod), hypergraph-impl, cross-instance-learn
 
 ## Recent
+### RepoCleanup:Documentation(2025-11-04,~4h,TDF-6specialists)
+✅COMPLETE: 3commits(5067ba1,145e8ee,3d3d531)
+P1-Archive: 22files→memory-bank/archives/(sessions:10,investigations:9,coordination:2,timeline:1), .gitignore-updated, active-context.md-deleted(duplicate)
+P2-Reorganize: memory-bank/(archives/,context/:16,designs/:moved-from-design-docs,sessions/), skills-updated(startup/shutdown), STATUS+activeContext-paths-updated
+P3-Compress: 23AI-primary-files,70%avg-reduction(target=55%),techniques(format-removal,symbolic-notation,equations,abbreviations), ~200K-tokens-saved, activeContext:73%reduction, CAM-DESIGN:84%reduction
+TDF-Coordination: 6specialists(Archaeologist,AIHumanClassifier,ArchitectureCurator,MemoryBankOrganizer,ArchiveStrategist,CompressionEvaluator)+integration→dependency-matrix,conflict-resolution,wolf-prevention,conditional-go→user-approved-all-3
+Result: clean-root,organized-memory-bank,compressed-AI-context,git-ignored-archives,~$0.27/session-saved(activeContext-alone)
+Files: 65files(P1-2),19files(P3),session-doc(repository-cleanup-session-2025-11-04.md)
+
 ### W4:Security(2025-11-04,~1h,TDF-aligned)
 ✅COMPLETE: 145/145t(0regress)
 Vuln-ELIMINATED: sqlx0.7.4→0.8.6(RUSTSEC-2024-0363), dotenv→dotenvy(RUSTSEC-2021-0141), paste(removed via sqlx), MySQL-driver-removed
