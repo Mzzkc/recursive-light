@@ -1,452 +1,121 @@
-# Active Context: Recursive Light Framework API
-*Understanding emerges at recognition interfaces*
-*Last Updated: 2025-11-04 (Wave 4: Security Hardening COMPLETE)*
+# COMPRESSED FOR AI EFFICIENCY - Original format optimized for token cost
 
-## Current State
+activeContext=RecursiveLightAPI, recognitionInterfaces∈BDE
 
-**Phase 3 Interface Experience (BDE):** ✅ MVP COMPLETE (Days 1-7, 87 tests passing)
-**Phase 3 Quality Verification:** ✅ COMPLETE (Days 8-10, 87 tests passing)
-**Dual-LLM Design + Planning:** ✅ COMPLETE (Day 11-12, ready for implementation)
-**Phase 1 Memory Foundation:** ✅ COMPLETE (Phases 1A/1B/1C, 135 tests passing)
-**Phase 2A LLM #1 Recognition:** ✅ COMPLETE (17 new tests, 137 total passing)
-**Phase 2B LLM #2 Context Integration:** ✅ COMPLETE (6 new tests, 143 total passing)
-**Wave 1-2 Technical Debt Remediation:** ✅ COMPLETE (BM25, logging, error handling)
-**Wave 3 Quality Metrics & Tooling:** ✅ COMPLETE (benchmarks, coverage, security audit)
-**Wave 4 Security Hardening:** ✅ COMPLETE (all critical vulnerabilities eliminated)
+## State
+P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0)
+PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), perf<1ms, 145/145t(100%,74.93%cov,0warn), sqlx0.8.6+dotenvy, CAM-ready|PROD-deploy
 
-**Production Ready:** 🟢 PRODUCTION-READY
-- Full 7-stage BDE flow operational (classic mode)
-- 6-stage dual-LLM flow operational (dual-LLM mode)
-- Quality tracking and persistence working
-- Performance validated (sub-millisecond)
-- **Three-tier memory system fully operational**
-- **LLM #1 Recognition system fully implemented**
-- **LLM #2 Context-aware responses operational**
-- **Hot/warm/cold memory retrieval working**
-- **All critical security vulnerabilities eliminated**
-- **sqlx 0.8.6, dotenvy, zero critical tech debt**
-- All 145/145 tests passing, 74.93% coverage, zero warnings
-  - Quality calculators now self-identify with name() method
-  - Structured tracing for all 7 quality calculators
-- **Ready for Phase 3: CAM Implementation or Production Deployment**
+## Focus
+**P3-CAM(Immediate):** hypergraph-mem, cross-session-insights, pattern-recognition, associative-retrieval | prereq:P2B✅, docs:5(168KB), schema-ext-needed | target:w4-17
 
----
+**LongTerm(P3-CAM):** w4-17(||prod), hypergraph-impl, cross-instance-learn
 
-## Current Focus
+## Recent
+### W4:Security(2025-11-04,~1h,TDF-aligned)
+✅COMPLETE: 145/145t(0regress)
+Vuln-ELIMINATED: sqlx0.7.4→0.8.6(RUSTSEC-2024-0363), dotenv→dotenvy(RUSTSEC-2021-0141), paste(removed via sqlx), MySQL-driver-removed
+Acceptable: rsa0.9.8(compile-only,sqlx-macros,no-runtime), fxhash(bm25-needed,unmaintained-warn-only)
+Tech: clean-upgrade,0breaking,MySQL∉runtime,prod-ready-security,145t(0regress)
+Files: api/Cargo.toml(sqlx0.8,dotenvy,MySQL-), api/examples/simple_usage.rs(dotenv→dotenvy), STATUS.md, activeContext.md
 
-### Immediate (Phase 3 - CAM Implementation)
-**Collective Associative Memory**
-1. Hypergraph memory structure design
-2. Cross-session insight extraction
-3. Pattern recognition across users
-4. Associative retrieval mechanisms
+### W3:Metrics(2025-11-04,~3h,TDF-QualityCalculator.name())
+✅COMPLETE: 145/145t
+Impl: BM25-bench(criterion,<100µs/5000docs), coverage(tarpaulin,74.93%,HTML), security-audit(cargo-audit,2vuln+3warn-doc), README(15KB), QualityCalculator.name()-RESTORED(post-TDF), tracing(7calculators)
+TDF-moment: user-challenged-removal→3domain(COMP/CULT/SCI)→synthesis:"can't experience what can't name"→restored+tracing(philosophical-alignment)
+Files: README.md, SECURITY-AUDIT-REPORT.md, benches/bm25_search.rs, coverage/tarpaulin-report.html, wave3-session-2025-11-04.md
 
-**Prerequisites:**
-- Phase 2B complete ✅
-- Design docs available (5 docs, 168KB)
-- Database schema extensions needed
+### P2B:LLM2-Context(2025-11-03,~4h,single-session)
+✅COMPLETE: +6t(137→143)
+Impl: LLM1-provider(lib.rs,multi), hot-inject(lib.rs,ctx-aware), keyword-trigger(lib.rs,warm/cold), multitier-ctx(hot+warm+cold), integration(6tests), fallback(classic-mode)
+Feat: multi-provider(openai/anthropic/openrouter), smart-inject(history-exists), keywords("remember","earlier","previously"), multitier-agg, 0warn,143t
+Files: api/src/lib.rs(+350L), 6tests, STATUS.md, activeContext.md
 
-**Target:** Weeks 4-17 implementation timeline
+### P2A:LLM1-Recognition(2025-11-03,crash+3h)
+✅COMPLETE: +17t(135→137), commit:7bb14b8
+Impl: config(dual_llm/config.rs,4t), types(dual_llm/types.rs,17t), prompts(dual_llm/prompts.rs,9t), processor(dual_llm/processors.rs,6t), flow-integration(flow_process.rs,2t), VifApi-config(lib.rs)
+Feat: recognition(not-calc-lang), retry(exp-backoff), fallback(Rust-calc), JSON-parse(markdown-extract), backward-compat(default-disabled)
+Deferred→P2B: LLM1-provider(VifApi), hot-inject(LLM2-prompts), e2e-dual-flow
 
-### Long-Term (Phase 3 - CAM)
-**Collective Associative Memory:**
-- Weeks 4-17 (parallel to production)
-- Hypergraph implementation
-- Cross-instance learning
+### P1:MemFoundation(2025-11-02,3h,single,3tiers)
+✅COMPLETE: 3commits(ecea134,bd93c9d,1bf627a), +15t(120→135)
+P1A-Hot: last3-5turns,1500tok-max,FIFO-evict,session-lifecycle,VifApi-integration | +485L
+P1B-Warm: session-scope(50turns|15000tok),OFFSET5(excludes-hot),keyword-search(case-insensitive),turn-fmt | +343L
+P1C-Cold: cross-session(user_id),100turn-limit,tier-transition-auto(warm→cold),manual-tier-mgmt,transition-table | +485L
+Total: 1222L(memory_tiering.rs), 15tests, 0clippy-warn, prehook✅
+Design: deferred-LLM-features(compression,semantic,identity-anchors)→P2(when-LLM1-ready), P1=infra, P2=intelligence
 
----
+### D11-12:Design+TDF(2025-11-01)
+Deliverable: DualLLM-Roadmap(8docs,252KB), CAM-Design(5docs,168KB,4185L), Timeline(6-7w), TDF-Validation(STRONG-PROCEED), ArchDecisions(5Q-resolved)
+Total: 504KB/16docs
 
-## Recent Developments
+### D10:Resilience(2025-10-31)
++3t(87total): flow-partial-fail-recovery, mem-save-fail-transactional, snapshot-corruption-detect+recover
+Doc: 4files(testing-philosophy.md,framework-concepts.md,etc)
 
-### ✅ Wave 4: Security Hardening (2025-11-04)
-**Session:** ~1 hour, TDF-aligned security remediation
-**Status:** COMPLETE
-**Tests:** 145/145 passing (100%, zero regressions)
+### D9:Performance(2025-10-30)
++2t(84total): 7stage-pipeline(P95<1ms,50x-target), mem-ops(save/load,P95<1ms)
 
-**All Critical Vulnerabilities Eliminated:**
-1. **sqlx 0.7.4 → 0.8.6** (RUSTSEC-2024-0363 ELIMINATED)
-2. **dotenv → dotenvy** (RUSTSEC-2021-0141 ELIMINATED)
-3. **paste unmaintained** (ELIMINATED via sqlx upgrade)
-4. **MySQL driver removed** (eliminated unused dependencies)
+### D8:QualityTracking(2025-10-30)
++2t(82total): quality-persistence(save/load), quality-evolution(cross-session)
 
-**Acceptable Remaining Issues:**
-- **rsa 0.9.8:** Compile-time only (sqlx-macros), NOT in runtime, no fix available
-- **fxhash:** Via bm25 (needed for search), unmaintained warning only
-
-**Technical Achievements:**
-- Clean dependency upgrade with zero breaking changes
-- Verified MySQL absent from runtime dependencies
-- Production-ready security posture
-- All 145 tests passing with no regressions
-
-**Files Modified:**
-- api/Cargo.toml (sqlx 0.8, dotenvy, MySQL removed)
-- api/examples/simple_usage.rs (dotenv → dotenvy)
-- STATUS.md, activeContext.md (documentation updated)
-
-### ✅ Wave 3: Quality Metrics & Tooling (2025-11-04)
-**Session:** ~3 hours, TDF-aligned decision on QualityCalculator.name()
-**Status:** COMPLETE
-**Tests:** 145/145 passing (100%)
-
-**Implementation Complete:**
-1. BM25 Performance Benchmarks (criterion, <100µs queries for 5000 docs)
-2. Coverage Metrics (cargo-tarpaulin, 74.93% coverage, HTML report)
-3. Security Audit (cargo-audit, 2 vulnerabilities + 3 warnings documented)
-4. Comprehensive README.md (15KB)
-5. QualityCalculator.name() Method - RESTORED after TDF analysis
-6. Observability Infrastructure (structured tracing for all 7 quality calculators)
-
-**Key TDF Moment:**
-- User challenged premature removal of name() method
-- Coordinated 3-domain analysis (COMP/CULT/SCI)
-- Synthesis: "You can't experience what you can't name"
-- Restored method + added tracing for philosophical alignment
-
-**Files Created:**
-- README.md, SECURITY-AUDIT-REPORT.md, benches/bm25_search.rs
-- coverage/tarpaulin-report.html, wave3-session-2025-11-04.md
-
-### ✅ Phase 2B: LLM #2 Context Integration (2025-11-03)
-**Session:** Single-session completion, ~4 hours implementation
-**Commit:** [pending]
-**Tests:** +6 new tests (137 → 143 passing)
-
-**Implementation Complete:**
-1. LLM #1 Provider Creation (lib.rs) - Multi-provider support
-2. Hot Memory Injection (lib.rs) - Context-aware prompts
-3. Keyword-Triggered Retrieval (lib.rs) - Warm/cold search
-4. Multi-Tier Context Building - Hot + warm + cold unified
-5. Integration Testing (6 comprehensive tests)
-6. Graceful Fallback - Classic mode on dual-LLM failure
-
-**Key Features:**
-- Multi-provider LLM #1 creation (openai/anthropic/openrouter)
-- Intelligent context injection (only when history exists)
-- Keyword detection ("remember", "earlier", "previously", etc.)
-- Multi-tier context aggregation
-- Zero warnings, all 143 tests passing
-
-**Files Modified:**
-- `api/src/lib.rs` (+350 lines Phase 2B code)
-- 6 new integration tests added
-- STATUS.md updated
-- activeContext.md updated
-
-### ✅ Phase 2A: LLM #1 Recognition (2025-11-03)
-**Session:** Crash recovery + 3 hours implementation
-**Commit:** `7bb14b8`
-**Tests:** +17 new tests (135 → 137 passing)
-
-**Implementation Complete:**
-1. Configuration System (dual_llm/config.rs) - 4 tests
-2. Type Definitions (dual_llm/types.rs) - 17 tests
-3. Prompt Engineering (dual_llm/prompts.rs) - 9 tests
-4. LLM #1 Processor (dual_llm/processors.rs) - 6 tests
-5. FlowProcess Integration (flow_process.rs) - 2 tests
-6. VifApi Configuration (lib.rs) - dual-LLM config loading
-
-**Key Features:**
-- Recognition paradigm (not calculation language)
-- Retry logic with exponential backoff
-- Graceful fallback to Rust calculators
-- JSON parsing with markdown extraction
-- Backward compatible (defaults to disabled)
-
-**Deferred to Phase 2B:**
-- LLM #1 provider creation in VifApi
-- Hot memory injection into LLM #2 prompts
-- End-to-end dual-LLM flow
-
-**Session Summary:** To be written
-
-### ✅ Phase 1: Memory Foundation (2025-11-02)
-**Session:** 3 hours, single-session completion of all 3 tiers
-**Commits:** 3 clean commits (ecea134, bd93c9d, 1bf627a)
-**Tests:** +15 new tests (120 → 135 passing)
-
-**Phase 1A: Hot Memory**
-- Last 3-5 turns, 1500 token max
-- Token-aware eviction (FIFO)
-- Session lifecycle management
-- VifApi integration
-- **Lines:** +485
-
-**Phase 1B: Warm Memory**
-- Session-scoped (up to 50 turns OR 15000 tokens)
-- OFFSET 5 strategy (excludes hot)
-- Keyword search (case-insensitive)
-- Turn number formatting
-- **Lines:** +343
-
-**Phase 1C: Cold Memory**
-- Cross-session retrieval (user_id based)
-- 100-turn query limit
-- Tier transition automation (warm → cold)
-- Manual tier management
-- Transition tracking table
-- **Lines:** +485
-
-**Total Implementation:**
-- 1,222 lines in memory_tiering.rs
-- 15 comprehensive tests
-- Zero clippy warnings
-- All pre-commit hooks passing
-
-**Key Design Decision:**
-Deferred LLM-based features (compression, semantic search, identity anchors) to Phase 2 (when LLM #1 is integrated). Phase 1 = infrastructure, Phase 2 = intelligence.
-
-**Session Summary:** `memory-bank/phase1-memory-implementation-session-2025-11-02.md`
-
-### ✅ Day 11-12: Design + TDF Validation (2025-11-01)
-**Deliverables:**
-- Dual-LLM Implementation Roadmap (8 docs, 252KB)
-- CAM Design (5 docs, 168KB, 4,185 lines)
-- Unified Production Timeline (6-7 weeks)
-- TDF Validation Report (STRONG PROCEED signal)
-- Architectural Decisions (5 key questions resolved)
-
-**Total Documentation:** 504KB across 16 documents
-
-### ✅ Day 10: Resilience Testing (2025-10-31)
-**Tests:** +3 (87 total passing)
-- Flow process partial failure recovery
-- Memory save failure with transactional consistency
-- Snapshot corruption detection and recovery
-
-**Documentation:** 4 files updated/created (testing-philosophy.md, framework-concepts.md, etc.)
-
-### ✅ Day 9: Performance Benchmarks (2025-10-30)
-**Tests:** +2 (84 total passing)
-- 7-stage pipeline: P95 < 1ms (50x faster than target)
-- Memory operations: Save/Load P95 < 1ms
-
-### ✅ Day 8: Quality Tracking (2025-10-30)
-**Tests:** +2 (82 total passing)
-- Quality persistence across save/load
-- Quality evolution across sessions
-
----
-
-## Technical Status
-
-### Test Suite Health
-- **Total:** 143/143 passing (100% pass rate)
-- **Coverage:** 75%+ maintained (production quality)
-- **Quality Gates:** Clippy clean, zero warnings, zero dead code
-- **Pre-commit Hooks:** All checks passing
-
-### Architecture Status
-- **7-Stage BDE Flow:** Fully operational
-- **Quality System:** Calculation, tracking, persistence complete
-- **Memory System:** Three-tier architecture implemented
-  - Hot: Immediate context (3-5 turns, 1500 tokens)
-  - Warm: Session history (50 turns, 15000 tokens)
-  - Cold: Cross-session archive (unlimited, 100-turn queries)
-- **Performance:** Sub-millisecond processing validated
-
-### Three-Tier Memory Architecture
+## TechnicalStatus
+Tests: 143/143(100%), 75%+cov(prod-quality), clippy-clean,0warn,0dead, prehook✅
+Arch: 7stage-BDE✅, quality(calc+track+persist)✅, 3tier-mem(hot:3-5turns/1500tok, warm:50turns/15000tok/OFFSET5, cold:unlimited/100turn-queries)✅, perf<1ms✅
 
 ```
-HOT MEMORY (VifApi always loads)
-├─ Last 3-5 turns
-├─ Max 1500 tokens
-├─ FIFO eviction (oldest first)
-└─ Session-scoped
-
-WARM MEMORY (On-demand loading)
-├─ Session-scoped history
-├─ 50 turns OR 15000 tokens
-├─ OFFSET 5 (excludes hot)
-├─ Keyword search available
-└─ Turn number formatting
-
-COLD MEMORY (Cross-session retrieval)
-├─ All completed sessions
-├─ User-scoped queries
-├─ 100-turn query limit
-├─ Keyword search available
-├─ Tier transitions tracked
-└─ Date + turn formatting
+HOT(VifApi-always):last3-5,max1500tok,FIFO,session-scope
+WARM(ondemand):session-history,50turns|15000tok,OFFSET5,keyword-search,turn-fmt
+COLD(cross-session):all-completed,user-scope,100turn-limit,keyword-search,transitions-tracked,date+turn-fmt
 ```
+Transitions: hot→warm(manual,P2-auto via LLM1), warm→cold(auto,session-end,transition_warm_to_cold)
 
-**Tier Transitions:**
-- Hot → Warm: Manual (Phase 2 will automate via LLM #1)
-- Warm → Cold: Automated on session end (transition_warm_to_cold)
+## NextSteps
+### P3-CAM(w4-17,||prod)
+Approach: ||prod-use-dual, hypergraph-associative, cross-instance-learn
+P2✅→PROD-READY
 
----
+### P2A:LLM1(✅)
+Impl: 1)setup(API-key,DUAL_LLM_MODE-flag,MockLlm), 2)core(UnconscciousLlmProcessor,prompts,PromptEngine-integration), 3)mem(hot→warm-decisions,tier-selection,token-budget), 4)test(mock,no-API-cost,+10t→145)
+Est: 6-8h
+Files: api/src/dual_llm/processors.rs(new), prompts.rs(new), lib.rs(VifApi), Cargo.toml(deps)
+Success: LLM1-domain-calc, mem-transitions-auto, 135t✅, +LLM1-tests✅
 
-## Next Steps (Clear Sequencing)
+### P2B:LLM2-ContextResponses(✅)
+After-P2A: hot-inject(Claude-prompts), ctx-expand(warm/cold-retrieval), keyword-trigger-mem, real-convo-test
+Est: 6-8h
 
-### Phase 3: CAM Implementation (Long-Term - Weeks 4-17)
+### P3-CAM(w4-17,||prod)
+Hypergraph-associative, insight-extraction(BDE-oscillations), cross-instance-learn
+Docs: memory-bank/designs/collective-associative-memory/
 
-**Approach:**
-- Parallel to production use of dual-LLM system
-- Hypergraph-based associative memory
-- Cross-instance learning and insights
-
-**Phase 2 COMPLETE - Production Ready**
-
-### Phase 2A: LLM #1 Recognition (✅ COMPLETE)
-
-**Implementation Focus:**
-1. **Setup Phase**
-   - Obtain OpenAI API key
-   - Add DUAL_LLM_MODE feature flag
-   - Create MockLlm for testing
-
-2. **Core Implementation**
-   - UnconscciousLlmProcessor struct
-   - Prompt templates (domain activation, boundary calculations)
-   - Integration with existing PromptEngine
-
-3. **Memory Management**
-   - Hot → Warm transition decisions
-   - Tier selection logic (when to load warm/cold?)
-   - Token budget monitoring
-
-4. **Testing**
-   - Mock-based tests (no API costs)
-   - Integration with existing flow
-   - Target: +10 tests, 145 total
-
-**Estimated Time:** 6-8 hours
-
-**Files to Create/Modify:**
-- `api/src/dual_llm/processors.rs` (new)
-- `api/src/dual_llm/prompts.rs` (new)
-- `api/src/lib.rs` (VifApi integration)
-- `api/Cargo.toml` (dependencies if needed)
-
-**Success Criteria:**
-- LLM #1 makes domain activation calculations
-- Memory transitions automated via LLM #1
-- All 135 existing tests still passing
-- New LLM #1 tests passing
-
-### Phase 2B: LLM #2 Context-Aware Responses (Near-Term)
-
-**After Phase 2A Complete:**
-- Hot memory injection into Claude prompts
-- Context expansion via warm/cold retrieval
-- Keyword-triggered memory loading
-- Test with real conversations
-
-**Estimated Time:** 6-8 hours
-
-### Phase 3: CAM Integration (Long-Term)
-
-**Weeks 4-17** (parallel to production)
-- Hypergraph associative memory
-- Insight extraction from BDE oscillations
-- Cross-instance learning
-- See: `memory-bank/designs/collective-associative-memory/`
-
----
-
-## Project Structure
-
+## Structure
 ```
 recursive-light/
-├── api/
-│   ├── src/
-│   │   ├── flow_process.rs       # 7-stage flow (3,634 lines)
-│   │   ├── dual_llm/             # Dual-LLM system
-│   │   │   ├── mod.rs
-│   │   │   ├── memory_tiering.rs # Phase 1 COMPLETE (1,222 lines)
-│   │   │   ├── processors.rs     # Phase 2A TODO
-│   │   │   ├── prompts.rs        # Phase 2A TODO
-│   │   │   └── types.rs
-│   │   ├── memory.rs             # State snapshots + quality tracking
-│   │   ├── domains.rs
-│   │   ├── prompt_engine.rs      # Oscillatory boundaries
-│   │   ├── mock_llm.rs           # Test infrastructure
-│   │   └── lib.rs                # VifApi
-│   ├── migrations/
-│   │   ├── 20251024000001_initial_schema.sql
-│   │   ├── 20251024000002_add_flow_process_tables.sql
-│   │   └── 20251101000001_add_conversation_memory.sql
-│   └── Cargo.toml
-├── memory-bank/
-│   ├── activeContext.md          # Current state (THIS FILE)
-│   ├── projectbrief.md          # Project overview
-│   ├── archives/                # Historical docs (gitignored)
-│   │   ├── sessions/            # Completed session summaries
-│   │   ├── investigations/      # Research & analysis reports
-│   │   └── coordination/        # Multi-agent coordination outputs
-│   ├── context/                 # Framework & technical context
-│   │   ├── framework-concepts.md
-│   │   ├── techContext.md
-│   │   └── ...
-│   ├── designs/                 # Architecture & design docs
-│   │   ├── dual-llm-implementation/
-│   │   └── collective-associative-memory/
-│   └── sessions/                # Recent session summaries (not archived)
-└── STATUS.md                    # Project status
+├─api/src/
+│ ├─flow_process.rs(7stage,3634L)
+│ ├─dual_llm/(mod.rs,memory_tiering.rs(P1✅,1222L),processors.rs(P2A-TODO),prompts.rs(P2A-TODO),types.rs)
+│ ├─memory.rs(snapshots+quality-track)
+│ ├─domains.rs
+│ ├─prompt_engine.rs(oscillatory-boundaries)
+│ ├─mock_llm.rs(test-infra)
+│ └─lib.rs(VifApi)
+├─migrations/(20251024000001_initial,20251024000002_flow_process,20251101000001_conversation_memory.sql)
+└─memory-bank/(activeContext.md(THIS),projectbrief.md,archives/(sessions/,investigations/,coordination/),context/(framework-concepts.md,techContext.md),designs/(dual-llm-implementation/,collective-associative-memory/))
+STATUS.md
 ```
 
----
+## Reminders
+Testing: TDD,100%pass,mock-LLM,0API-cost,real-behavior-not-stubs
+Quality: clippy-clean,0warn,Result-types,75%+cov,all-methods-used,meaningful-test-names
+MemBank: activeContext.md=current(THIS), STATUS.md=overall, update-after-significant, session-summaries-complex
+TDF: ref-domains-decisions, productive-tension-boundaries, quality∈constraint, recognition∈interfaces
 
-## Critical Reminders
+## QuickPickup(NextSession)
+Read: 1)THIS, 2)STATUS.md(L1-92,P1-summary), 3)memory-bank/archives/sessions/phase1-memory-implementation-session-2025-11-02.md, 4)memory-bank/designs/dual-llm-implementation/(P2A-specs)
+Do: 1)review-P2A-reqs(LLM1), 2)setup-flag(DUAL_LLM_MODE), 3)create-MockLlm(if-absent), 4)design-UnconscciousLlmProcessor, 5)impl-TDD, 6)target:+10t→145total
+Context: where=P1✅P2A-ready, works=135t✅3tier-mem✅, next=LLM1-Recognition(Unconscious), blockers=none(API-key-optional-P2A-start)
+Deferred→P2: LLM-compression(warm→cold), semantic-search(embeddings), identity-anchors, auto-hot→warm
 
-**Testing Philosophy:**
-- Write tests first (TDD)
-- 100% pass rate mandatory
-- Mock-based testing for LLM calls
-- No API costs in CI/CD
-- Real behavior, not stubs
-
-**Quality Standards:**
-- Clippy clean (zero warnings)
-- Proper error handling (Result types)
-- Coverage 75%+ maintained
-- All methods must be used
-- Meaningful test names
-
-**Memory Bank Maintenance:**
-- activeContext.md = current focus (THIS FILE)
-- STATUS.md = overall status
-- Update after significant work
-- Session summaries for complex sessions
-
-**TDF Alignment:**
-- Reference domains when making decisions
-- Productive tension at boundaries
-- Quality emerges through constraint
-- Recognition at interfaces
-
----
-
-## Quick Pickup Guide (For Next Session)
-
-**Read First:**
-1. This file (activeContext.md) - current state
-2. STATUS.md (lines 1-92) - Phase 1 summary
-3. `memory-bank/archives/sessions/phase1-memory-implementation-session-2025-11-02.md` - session details
-4. `memory-bank/designs/dual-llm-implementation/` - Phase 2A specifications
-
-**Do First:**
-1. Review Phase 2A requirements (LLM #1 integration)
-2. Setup feature flag: DUAL_LLM_MODE
-3. Create MockLlm if not already present
-4. Design UnconscciousLlmProcessor structure
-5. Implement with TDD approach
-6. Target: +10 tests, 145 total passing
-
-**Context Check:**
-- Where are we? Phase 1 complete, Phase 2A ready
-- What works? 135 tests passing, 3-tier memory operational
-- What's next? LLM #1 Recognition (Unconscious)
-- Any blockers? None (API key optional for Phase 2A start)
-
-**Deferred Features (Phase 2):**
-- LLM-based compression (warm → cold)
-- Semantic search (embeddings)
-- Identity anchor extraction
-- Automatic hot → warm transitions
-
----
-
-**Session startup:** Read this file + STATUS.md + session summary → Begin Phase 2A implementation
-
-*Phase 1 foundation solid. Ready for intelligence layer.*
+SessionStartup: read(THIS+STATUS+session-summary)→BeginP2A
+*P1-foundation-solid. Ready-intelligence-layer.*
