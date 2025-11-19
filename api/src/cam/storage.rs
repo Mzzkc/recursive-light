@@ -1,11 +1,11 @@
-// CAM Storage - PostgreSQL + pgvector operations
-// Phase 3: Hypergraph storage implementation
+// CAM Storage - PostgreSQL metadata operations
+// Phase 3: Qdrant + PostgreSQL hybrid (vectors in Qdrant, metadata in PostgreSQL)
 
 use crate::cam::types::{CAMError, Domain, Hyperedge, Insight, LifecycleStage};
 use sqlx::types::Uuid;
 use sqlx::{PgPool, Row};
 
-/// PostgreSQL storage for CAM system
+/// PostgreSQL storage for CAM system (metadata only, vectors in Qdrant)
 pub struct CAMStorage {
     pool: PgPool,
 }
@@ -15,25 +15,20 @@ impl CAMStorage {
         Self { pool }
     }
 
-    /// Insert a new insight into the database
+    /// Insert insight metadata (embedding stored separately in Qdrant)
     pub async fn insert_insight(&self, insight: &Insight) -> Result<(), CAMError> {
-        let embedding_vec = insight.embedding.as_ref().ok_or_else(|| {
-            CAMError::ValidationError("Embedding required for storage".to_string())
-        })?;
-
         sqlx::query(
             r#"
             INSERT INTO cam_insights (
-                id, content, embedding, primary_domain, secondary_domains,
+                id, content, primary_domain, secondary_domains,
                 confidence, lifecycle_stage, source_instance_id,
                 source_user_id, source_flow_id, oscillation_context,
                 observation_count, metadata, created_at, last_validated
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
             "#,
         )
         .bind(insight.id)
         .bind(&insight.content)
-        .bind(embedding_vec.as_slice())
         .bind(format!("{:?}", insight.primary_domain))
         .bind(
             insight
@@ -63,7 +58,7 @@ impl CAMStorage {
         let row = sqlx::query(
             r#"
             SELECT
-                id, content, embedding, primary_domain, secondary_domains,
+                id, content, primary_domain, secondary_domains,
                 confidence, lifecycle_stage, source_instance_id,
                 source_user_id, source_flow_id, oscillation_context,
                 observation_count, created_at, last_validated, metadata
@@ -79,30 +74,55 @@ impl CAMStorage {
         self.row_to_insight(row)
     }
 
-    /// Semantic search using vector similarity (pgvector)
-    pub async fn semantic_search(
+    /// Get multiple insights by IDs (used after Qdrant semantic search)
+    /// Preserves order from Qdrant ranking
+    pub async fn get_insights_by_ids(&self, ids: &[Uuid]) -> Result<Vec<Insight>, CAMError> {
+        if ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let rows = sqlx::query(
+            r#"
+            SELECT
+                id, content, primary_domain, secondary_domains,
+                confidence, lifecycle_stage, source_instance_id,
+                source_user_id, source_flow_id, oscillation_context,
+                observation_count, created_at, last_validated, metadata
+            FROM cam_insights
+            WHERE id = ANY($1)
+            ORDER BY array_position($1, id)
+            "#,
+        )
+        .bind(ids)
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| self.row_to_insight(row))
+            .collect()
+    }
+
+    /// Get insights by domain
+    pub async fn get_insights_by_domain(
         &self,
-        query_embedding: &[f32],
-        min_similarity: f64,
+        domain: &Domain,
         limit: usize,
     ) -> Result<Vec<Insight>, CAMError> {
         let rows = sqlx::query(
             r#"
             SELECT
-                id, content, embedding, primary_domain, secondary_domains,
+                id, content, primary_domain, secondary_domains,
                 confidence, lifecycle_stage, source_instance_id,
                 source_user_id, source_flow_id, oscillation_context,
-                observation_count, created_at, last_validated, metadata,
-                1 - (embedding <=> $1) AS similarity
+                observation_count, created_at, last_validated, metadata
             FROM cam_insights
-            WHERE lifecycle_stage != 'Deprecated'
-              AND (1 - (embedding <=> $1)) >= $2
-            ORDER BY similarity DESC
-            LIMIT $3
+            WHERE primary_domain = $1
+              AND lifecycle_stage != 'Deprecated'
+            ORDER BY confidence DESC, observation_count DESC
+            LIMIT $2
             "#,
         )
-        .bind(query_embedding)
-        .bind(min_similarity)
+        .bind(format!("{:?}", domain))
         .bind(limit as i64)
         .fetch_all(&self.pool)
         .await?;
@@ -227,7 +247,8 @@ impl CAMStorage {
 
         let id: Uuid = row.try_get("id")?;
         let content: String = row.try_get("content")?;
-        let embedding: Option<Vec<f32>> = row.try_get("embedding").ok();
+        // Embedding stored in Qdrant, not PostgreSQL
+        let embedding: Option<Vec<f32>> = None;
         let primary_domain_str: String = row.try_get("primary_domain")?;
         let secondary_domains_str: Vec<String> = row.try_get("secondary_domains")?;
         let confidence: f64 = row.try_get::<f32, _>("confidence")? as f64;

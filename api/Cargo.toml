@@ -19,6 +19,8 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 # Wave 1: BM25 proper implementation
 bm25 = "2.3"
+# Phase 3: Conscious signal detection
+regex = "1.10"
 # Wave 2: Proper logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

@@ -1,6 +1,9 @@
 // CAM (Collective Associative Memory) - Public API
 // Phase 3: Hypergraph-based knowledge system for Recursive Light Framework
 
+pub mod embeddings;
+pub mod manager;
+pub mod qdrant_storage;
 pub mod storage;
 pub mod types;
 
@@ -11,5 +14,9 @@ pub use types::{
     RelationshipType, TemporalSort, TimeRange,
 };
 
-// Re-export storage
+// Re-export primary API (most users should use CAMManager)
+pub use manager::CAMManager;
+
+// Re-export storage layers (advanced usage)
+pub use qdrant_storage::QdrantVectorStorage;
 pub use storage::CAMStorage;

@@ -1,0 +1,60 @@
+# Docker Compose for Recursive Light Framework Development
+# Phase 3: PostgreSQL + Qdrant for CAM system
+
+version: '3.8'
+
+services:
+  # PostgreSQL - Metadata, hypergraph, validations
+  postgres:
+    image: postgres:14-alpine
+    container_name: recursive-light-postgres
+    environment:
+      POSTGRES_DB: recursive_light_dev
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Qdrant - Vector embeddings, semantic search
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: recursive-light-qdrant
+    ports:
+      - "6333:6333"  # REST API
+      - "6334:6334"  # gRPC API (Rust client uses this)
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      # Optional: Configure Qdrant
+      # - QDRANT__SERVICE__GRPC_PORT=6334
+      # - QDRANT__LOG_LEVEL=INFO
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:6333/"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+# Usage:
+# docker-compose up -d                 # Start services
+# docker-compose logs -f qdrant        # View Qdrant logs
+# docker-compose logs -f postgres      # View PostgreSQL logs
+# docker-compose down                  # Stop services
+# docker-compose down -v               # Stop and remove volumes (data reset)
+
+# Access:
+# PostgreSQL: postgresql://postgres:postgres@localhost:5432/recursive_light_dev
+# Qdrant REST: http://localhost:6333/dashboard
+# Qdrant gRPC: http://localhost:6334 (for Rust client)

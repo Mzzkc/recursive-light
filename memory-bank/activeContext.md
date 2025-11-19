@@ -3,15 +3,24 @@
 activeContext=RecursiveLightAPI, recognitionInterfaces∈BDE
 
 ## State
-P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0)
-PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), perf<1ms, 145/145t(100%,74.93%cov,0warn), sqlx0.8.6+dotenvy, CAM-ready|PROD-deploy
+P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,146t)
+PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), perf<1ms, 146/146t(100%,75%cov,0warn), sqlx0.8.6+dotenvy, CAM-hybrid-arch✅|PROD-deploy
 
 ## Focus
-**P3-CAM(Immediate):** hypergraph-mem, cross-session-insights, pattern-recognition, associative-retrieval | prereq:P2B✅, docs:5(168KB), schema-ext-needed | target:w4-17
+**P3-CAM(NextPhase):** Foundation✅→Integration-tests(hybrid-ops,insert→search→retrieve), LLM1-insight-extraction(Stage6-BDE→CAM), semantic-queries(Qdrant-HNSW), cross-instance-learning | Architecture:Qdrant(2-10x-faster)+PostgreSQL+OpenAI
 
-**LongTerm(P3-CAM):** w4-17(||prod), hypergraph-impl, cross-instance-learn
+**LongTerm(P3-CAM):** w4-17(||prod), insight-extraction(Stage6), semantic-query(Stage7), cross-instance-learn
 
 ## Recent
+### P3-CAM-ArchitecturalPivot:Qdrant+PostgreSQL(2025-11-19,~4h,TDF-guided)
+✅COMPLETE: FullPivot(pgvector→Qdrant), 146tests(+1), 0warnings
+Implementation: 1)QdrantVectorStorage(264L,HNSW,cosine), 2)OpenAIEmbeddingGenerator(181L,ada-002,NO-MOCKS), 3)CAMStorage(metadata-only), 4)CAMManager(230L,coordinator), 5)migration(Qdrant-notes), 6)docker-compose(postgres+qdrant), 7)CAM-DESIGN.md(11refs-updated), 8)types.rs(Qdrant-comments)
+Architecture: Qdrant(vectors,1536d,HNSW)+PostgreSQL(metadata,hypergraph)+OpenAI(embeddings)→CAMManager-orchestrates
+Results: 146/146tests✅, 0clippy-warnings✅, 0stubs/TODOs-in-CAM✅, prod-quality✅, session-summary-created
+Philosophy: No-mocks(CULT), User-intuition-validated(EXP0.9→TDF:COMP0.9,SCI0.95), 2-10x-faster-HNSW-vs-IVFFlat
+NextImmediate: integration-tests(hybrid-ops), LLM1-insight-extraction(Stage6-BDE)
+Files: 8new/updated, memory-bank/sessions/cam-architecture-pivot-session-2025-11-19.md
+
 ### RepoCleanup:Documentation(2025-11-04,~4h,TDF-6specialists)
 ✅COMPLETE: 3commits(5067ba1,145e8ee,3d3d531)
 P1-Archive: 22files→memory-bank/archives/(sessions:10,investigations:9,coordination:2,timeline:1), .gitignore-updated, active-context.md-deleted(duplicate)
@@ -69,7 +78,7 @@ Doc: 4files(testing-philosophy.md,framework-concepts.md,etc)
 +2t(82total): quality-persistence(save/load), quality-evolution(cross-session)
 
 ## TechnicalStatus
-Tests: 143/143(100%), 75%+cov(prod-quality), clippy-clean,0warn,0dead, prehook✅
+Tests: 146/146(100%), 75%+cov(prod-quality), clippy-clean,0warn,0dead, prehook✅
 Arch: 7stage-BDE✅, quality(calc+track+persist)✅, 3tier-mem(hot:3-5turns/1500tok, warm:50turns/15000tok/OFFSET5, cold:unlimited/100turn-queries)✅, perf<1ms✅
 
 ```
@@ -121,10 +130,10 @@ MemBank: activeContext.md=current(THIS), STATUS.md=overall, update-after-signifi
 TDF: ref-domains-decisions, productive-tension-boundaries, quality∈constraint, recognition∈interfaces
 
 ## QuickPickup(NextSession)
-Read: 1)THIS, 2)STATUS.md(L1-92,P1-summary), 3)memory-bank/archives/sessions/phase1-memory-implementation-session-2025-11-02.md, 4)memory-bank/designs/dual-llm-implementation/(P2A-specs)
-Do: 1)review-P2A-reqs(LLM1), 2)setup-flag(DUAL_LLM_MODE), 3)create-MockLlm(if-absent), 4)design-UnconscciousLlmProcessor, 5)impl-TDD, 6)target:+10t→145total
-Context: where=P1✅P2A-ready, works=135t✅3tier-mem✅, next=LLM1-Recognition(Unconscious), blockers=none(API-key-optional-P2A-start)
-Deferred→P2: LLM-compression(warm→cold), semantic-search(embeddings), identity-anchors, auto-hot→warm
+Read: 1)THIS, 2)STATUS.md(P3-CAM-section), 3)memory-bank/sessions/cam-architecture-pivot-session-2025-11-19.md, 4)api/src/cam/(qdrant_storage.rs,manager.rs,embeddings.rs)
+Do: 1)verify-services(docker-compose up), 2)integration-tests(hybrid-ops), 3)LLM1-insight-extraction(Stage6-BDE), 4)test-insert→search→retrieve, 5)verify-CAMManager-coordination
+Context: where=P3-CAM-foundation✅, works=146t✅hybrid-arch✅, next=integration+LLM1-insights, blockers=none(OpenAI-key-required)
+Architecture: Qdrant(vectors)+PostgreSQL(metadata)+OpenAI(embeddings)→CAMManager
 
-SessionStartup: read(THIS+STATUS+session-summary)→BeginP2A
-*P1-foundation-solid. Ready-intelligence-layer.*
+SessionStartup: read(THIS+STATUS+session-summary)→BeginIntegrationTests
+*CAM-foundation-complete. Ready-for-insight-extraction.*

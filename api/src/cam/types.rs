@@ -18,7 +18,9 @@ pub struct Insight {
     /// Human-readable insight text
     pub content: String,
 
-    /// Semantic embedding (1536-dim for OpenAI, 768-dim for local models)
+    /// Semantic embedding (1536-dim OpenAI ada-002)
+    /// Stored in Qdrant, not PostgreSQL - populated only when needed for operations
+    /// Use QdrantVectorStorage to insert/query embeddings
     #[serde(skip)]
     pub embedding: Option<Vec<f32>>,
 

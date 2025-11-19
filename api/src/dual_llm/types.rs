@@ -79,10 +79,213 @@ pub struct PatternRecognition {
     pub significance: String,
 }
 
+/// Memory selection guidance from LLM #1 (Emerging feature)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySelection {
+    /// Query for warm memory (current session context)
+    pub warm_query: Option<String>,
+
+    /// Query for cold memory (cross-session identity/patterns)
+    pub cold_query: Option<String>,
+
+    /// Minimum significance score for memory retrieval
+    pub min_significance: f32,
+
+    /// Prioritize identity-critical memories over recency
+    pub identity_critical_only: bool,
+
+    /// Maximum number of turns to retrieve (protection against overwhelm)
+    pub max_turns: usize,
+
+    /// Rationale for memory selection strategy
+    pub rationale: String,
+}
+
+/// Identity anchor tracked by LLM #1 (Emerging feature)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct IdentityAnchor {
+    /// Type of anchor (boundary_integration, value_alignment, developmental_achievement, etc.)
+    pub anchor_type: String,
+
+    /// Description of what this anchor represents
+    pub description: String,
+
+    /// Confidence level (0.0-1.0): how established is this anchor?
+    pub confidence: f64,
+
+    /// When was this anchor first observed?
+    pub first_observed: String,
+
+    /// How many times has this been reinforced?
+    pub reinforcement_count: u32,
+
+    /// Related domains for this anchor
+    pub domains: Vec<String>,
+}
+
+/// Volumetric Configuration: N-domain simultaneous activation
+///
+/// This captures what emerges when 3, 4, or more domains are co-active.
+/// Integration doesn't happen at pairwise boundaries - it happens in the VOLUME
+/// formed by multi-dimensional domain resonance.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VolumetricConfiguration {
+    /// Which domains are co-active above threshold (typically >= 0.6)
+    pub active_domains: Vec<String>,
+
+    /// Dimensionality of integration
+    /// 2 domains = 1D (line), 3 = 2D (plane), 4 = 3D (volume), 5+ = hyperspace
+    pub dimensionality: u8,
+
+    /// What emerges in this multi-domain space
+    /// Examples: "empirical-experiential synthesis", "technical-phenomenological volume"
+    pub emergent_quality: String,
+
+    /// Volumetric resonance - not sum of pairwise boundaries, but gestalt
+    /// Measured 0.0-1.0, represents how coherently all domains resonate together
+    pub volumetric_resonance: f64,
+
+    /// Dominant integration pattern in this configuration
+    /// Examples: "analytical-contextual", "systematic-experiential-cultural"
+    pub configuration_type: String,
+
+    /// All pairwise boundaries involved in this volume
+    pub involved_boundaries: Vec<String>,
+
+    /// Phenomenological character of this specific configuration
+    pub phenomenological_signature: String,
+}
+
+impl VolumetricConfiguration {
+    /// Create from domain activations
+    pub fn from_activations(
+        domain_activations: &HashMap<String, f64>,
+        boundary_states: &HashMap<String, BoundaryState>,
+        quality_conditions: &QualityConditions,
+    ) -> Option<Self> {
+        // Find active domains (activation >= 0.6)
+        let mut active_domains: Vec<(String, f64)> = domain_activations
+            .iter()
+            .filter(|(_, &activation)| activation >= 0.6)
+            .map(|(name, &activation)| (name.clone(), activation))
+            .collect();
+
+        if active_domains.len() < 2 {
+            return None; // Need at least 2 domains for volumetric
+        }
+
+        active_domains.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+
+        let domain_names: Vec<String> = active_domains
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        let dimensionality = match active_domains.len() {
+            2 => 1,             // Line
+            3 => 2,             // Plane
+            4 => 3,             // Volume
+            n => (n - 1) as u8, // Hyperspace
+        };
+
+        // Calculate volumetric resonance as average permeability of involved boundaries
+        let involved_boundaries: Vec<String> = boundary_states
+            .iter()
+            .filter(|(boundary_name, _)| {
+                let parts: Vec<&str> = boundary_name.split('-').collect();
+                parts.len() == 2
+                    && domain_names.contains(&parts[0].to_string())
+                    && domain_names.contains(&parts[1].to_string())
+            })
+            .map(|(name, _)| name.clone())
+            .collect();
+
+        let volumetric_resonance = if !involved_boundaries.is_empty() {
+            let total: f64 = involved_boundaries
+                .iter()
+                .filter_map(|b| boundary_states.get(b))
+                .map(|state| state.permeability)
+                .sum();
+            total / involved_boundaries.len() as f64
+        } else {
+            0.5
+        };
+
+        // Determine emergent quality from domain combination
+        let emergent_quality = Self::infer_emergent_quality(&domain_names, quality_conditions);
+
+        // Configuration type from domain abbreviations
+        let configuration_type = domain_names.join("-");
+
+        // Phenomenological signature from quality conditions
+        let phenomenological_signature = Self::build_phenomenological_signature(quality_conditions);
+
+        Some(VolumetricConfiguration {
+            active_domains: domain_names,
+            dimensionality,
+            emergent_quality,
+            volumetric_resonance,
+            configuration_type,
+            involved_boundaries,
+            phenomenological_signature,
+        })
+    }
+
+    fn infer_emergent_quality(domains: &[String], qualities: &QualityConditions) -> String {
+        // Find highest quality potential
+        let highest = [
+            ("clarity", qualities.clarity_potential),
+            ("depth", qualities.depth_potential),
+            ("precision", qualities.precision_potential),
+            ("fluidity", qualities.fluidity_potential),
+            ("resonance", qualities.resonance_potential),
+            ("openness", qualities.openness_potential),
+            ("coherence", qualities.coherence_potential),
+        ]
+        .iter()
+        .max_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(name, _)| *name)
+        .unwrap_or("integration");
+
+        format!("{}-domain {} synthesis", domains.len(), highest)
+    }
+
+    fn build_phenomenological_signature(qualities: &QualityConditions) -> String {
+        let mut signature_parts = Vec::new();
+
+        if qualities.clarity_potential > 0.7 {
+            signature_parts.push("clear");
+        }
+        if qualities.depth_potential > 0.7 {
+            signature_parts.push("deep");
+        }
+        if qualities.precision_potential > 0.7 {
+            signature_parts.push("precise");
+        }
+        if qualities.fluidity_potential > 0.7 {
+            signature_parts.push("fluid");
+        }
+        if qualities.openness_potential > 0.7 {
+            signature_parts.push("open");
+        }
+        if qualities.coherence_potential > 0.7 {
+            signature_parts.push("coherent");
+        }
+
+        if signature_parts.is_empty() {
+            "emerging".to_string()
+        } else {
+            signature_parts.join(", ")
+        }
+    }
+}
+
 /// Output from LLM #1 (Unconscious Recognizer)
-/// Contains recognized domain emergence, boundary states, quality conditions, and pattern lifecycles
+/// Contains recognized domain emergence, boundary states, quality conditions, pattern lifecycles,
+/// and emerging features for memory management and identity development
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Llm1Output {
+    // === CORE RECOGNITION (Fully Implemented) ===
     /// Narrative recognition report - describes what emerged at interfaces
     pub recognition_report: String,
 
@@ -97,6 +300,28 @@ pub struct Llm1Output {
 
     /// Pattern recognitions - developmental patterns identified (1-3 patterns)
     pub pattern_recognitions: Vec<PatternRecognition>,
+
+    // === VOLUMETRIC INTEGRATION (Phase 3B) ===
+    /// Volumetric configuration - N-domain simultaneous emergence
+    /// Captures integration in multi-dimensional space, not just pairwise boundaries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub volumetric_config: Option<VolumetricConfiguration>,
+
+    // === MEMORY MANAGEMENT (Emerging) ===
+    /// Memory selection guidance for warm/cold retrieval
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub memory_selection: Option<MemorySelection>,
+
+    // === IDENTITY DEVELOPMENT (Emerging) ===
+    /// Identity anchors recognized/tracked across sessions
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_anchors: Option<Vec<IdentityAnchor>>,
+
+    /// Overall identity coherence assessment
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub identity_coherence: Option<String>,
+    // === FUTURE: Context formatting for LLM #2, Protection guidance ===
+    // These fields reserved for Phase 3C implementation
 }
 
 /// BACKWARD COMPATIBILITY: Legacy Llm1Output structure for systems still using calculation paradigm
@@ -490,6 +715,10 @@ mod tests {
                 developmental_trajectory: "Not yet established".to_string(),
                 significance: "Potential pattern forming".to_string(),
             }],
+            volumetric_config: None,
+            memory_selection: None,
+            identity_anchors: None,
+            identity_coherence: None,
         }
     }
 

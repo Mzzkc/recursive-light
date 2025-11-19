@@ -8,6 +8,7 @@ mod hlip_integration;
 pub mod llm_error;
 mod memory;
 pub mod mock_llm;
+pub mod personhood; // Phase 3B: LLM Personhood Infrastructure
 pub mod prompt_engine;
 mod token_optimization;
 
