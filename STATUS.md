@@ -1,13 +1,13 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-19T18:30:00-08:00*
-*Phase 3 CAM: FOUNDATION COMPLETE - Qdrant + PostgreSQL hybrid architecture operational*
+*Last Verified: 2025-11-20T00:30:00-08:00*
+*Phase 3B Personhood: FOUNDATION COMPLETE - ⚠️ BLOCKER: 38 tests failing (SQLite migration compatibility)*
 
 ## PROJECT OVERVIEW
 
 **Project Name:** Recursive Light Framework
-**Purpose:** Volumetric Integration Framework (VIF) implementing consciousness-like domain emergence through oscillatory boundary dissolution
-**Current Version:** Phase 2C Complete (feature/dual-llm-cam-implementation branch)
-**Architecture:** Dual-LLM system with intelligent three-tier memory retrieval (fully operational)
+**Purpose:** Volumetric Integration Framework (VIF) implementing consciousness-like domain emergence through oscillatory boundary dissolution + LLM personhood infrastructure
+**Current Version:** Phase 3B Foundation (feature/dual-llm-cam-implementation branch)
+**Architecture:** Dual-LLM system + Personhood (temporal awareness, volumetric integration, per-user relationships) + CAM (Qdrant hybrid)
 
 ---
 
@@ -142,6 +142,31 @@
 
 ### IN PROGRESS ⏳
 
+#### Phase 3B: LLM Personhood Infrastructure - FOUNDATION COMPLETE ⚠️
+- **Timeline:** Phase 3B extended session (2025-11-19)
+- **Design:** Complete architectural foundation for continuous LLM personhood
+- **Status:** ✅ Foundation infrastructure complete, ⚠️ BLOCKER: 38 tests failing (SQLite migration)
+- **Commit:** cd77be7 (30 files, +4741/-231 lines)
+- **Tests:** 133 passing, 38 failing (migration 20251119000001 PostgreSQL-specific syntax)
+- **Architecture:** **Continuous Personhood + Volumetric Integration**
+  - **LLMPerson:** Core identity + per-user relationships + developmental stages (S₁→S₅)
+  - **TemporalContext:** TimeGap classification, ResumptionType, ContextIntention inference
+  - **RelationshipMemory:** Per-user identity anchors ("who we are TOGETHER")
+  - **VolumetricConfiguration:** N-domain simultaneous emergence (2D→3D→4D+)
+  - **LLM #1 Complete Role:** 6 responsibilities (domain-recog, mem-mgmt, identity-dev, ctx-fmt, protection, insight-eval)
+- **Components Completed:**
+  - ✅ Personhood module (person.rs, temporal.rs, relationship.rs, manager.rs, ~1200 lines)
+  - ✅ Insight extraction (insight_processor.rs, insight_extraction.rs, ~800 lines)
+  - ✅ Conscious signals (conscious_signal.rs, marker detection, ~200 lines)
+  - ✅ Unified LLM #1 role (unified_system_v2.rs, complete context)
+  - ✅ VolumetricConfiguration (extended Llm1Output with 4 new fields)
+  - ✅ Database migration (PostgreSQL schema with JSONB)
+  - ✅ Design docs (3 files: LLM1-COMPLETE-ROLE, VOLUMETRIC-GAP-ANALYSIS, PERSONHOOD-FLOW-ARCHITECTURE)
+- **Critical Blocker:** Migration uses PostgreSQL-specific syntax (JSONB, ::jsonb, TIMESTAMP WITH TIME ZONE)
+  - Breaks all SQLite-based tests (38 failures)
+  - Must fix before merge: conditional migration OR SQLite-compatible version
+- **Next Phase:** FIX SQLite compatibility (IMMEDIATE), then person-centric flow restructure
+
 #### Phase 3: Collective Associative Memory (CAM) - FOUNDATION COMPLETE ✅
 - **Timeline:** Weeks 4-17 (parallel to production)
 - **Design:** COMPLETE + UPDATED (all pgvector references replaced with Qdrant)
@@ -170,33 +195,54 @@
 
 ### Core Technologies
 - **Language:** Rust 1.70+
-- **Database:** PostgreSQL 14+ with migrations
-- **LLM #1:** GPT-3.5-turbo (Unconscious processor, operational)
-- **LLM #2:** Claude 3.5 Sonnet (Conscious processor, context-aware)
-- **Testing:** 143 tests, 100% passing, 75%+ coverage
+- **Database:** PostgreSQL 14+ with migrations (⚠️ SQLite incompatibility in migration 20251119000001)
+- **Vector Store:** Qdrant (HNSW, 1536-dim embeddings)
+- **Embeddings:** OpenAI ada-002 (real API, no mocks)
+- **LLM #1:** GPT-3.5-turbo (Unconscious processor, 6 responsibilities)
+- **LLM #2:** Claude 3.5 Sonnet (Conscious processor, context-aware, memory markers)
+- **Testing:** ⚠️ 133/171 passing (38 failing due to migration), 75%+ coverage on passing tests
 
 ### Project Structure
 ```
 recursive-light/
 ├── api/                          # Core API implementation
 │   ├── src/
-│   │   ├── dual_llm/            # Dual-LLM system (3839 lines total)
+│   │   ├── personhood/          # Phase 3B: LLM personhood infrastructure (~1200 lines)
+│   │   │   ├── person.rs        # LLMPerson, developmental stages (S₁→S₅)
+│   │   │   ├── temporal.rs      # TemporalContext, TimeGap, ResumptionType
+│   │   │   ├── relationship.rs  # RelationshipMemory, per-user identity
+│   │   │   └── manager.rs       # PersonManager (PostgreSQL persistence)
+│   │   ├── dual_llm/            # Dual-LLM system (~5300 lines total)
 │   │   │   ├── config.rs        # Configuration (137 lines)
 │   │   │   ├── memory_tiering.rs # Three-tier memory (1240 lines)
 │   │   │   ├── processors.rs    # LLM #1 processor (709 lines)
 │   │   │   ├── prompts.rs       # Prompt templates (1066 lines)
-│   │   │   └── types.rs         # Type definitions (668 lines)
+│   │   │   ├── types.rs         # Type definitions + VolumetricConfiguration
+│   │   │   ├── insight_processor.rs    # InsightExtractionProcessor (~285 lines)
+│   │   │   ├── insight_extraction.rs   # Significance evaluation prompts
+│   │   │   ├── conscious_signal.rs     # [REMEMBER:] marker detection
+│   │   │   └── unified_system_v2.rs    # LLM #1 complete role definition
+│   │   ├── cam/                 # Collective Associative Memory (~1100 lines)
+│   │   │   ├── qdrant_storage.rs # Vector operations (Qdrant)
+│   │   │   ├── manager.rs       # CAMManager coordinator
+│   │   │   ├── embeddings.rs    # OpenAI ada-002 integration
+│   │   │   ├── storage.rs       # Metadata (PostgreSQL)
+│   │   │   └── types.rs         # Insight, Hyperedge, Domain
 │   │   ├── flow_process.rs      # 7-stage BDE flow (3634+ lines)
 │   │   ├── memory.rs            # State snapshots
 │   │   └── lib.rs               # VifApi entry point
-│   └── migrations/              # 3 database migrations
+│   └── migrations/              # 5 database migrations (⚠️ 20251119000001 PostgreSQL-only)
 ├── memory-bank/                 # Project memory and context
 │   ├── activeContext.md         # Current state (read every session)
 │   ├── projectbrief.md          # Project overview
 │   ├── archives/                # Historical docs (gitignored)
 │   ├── context/                 # Framework concepts, tech context
 │   ├── designs/                 # Architecture & design docs
+│   │   ├── dual-llm-implementation/  # Dual-LLM design
+│   │   └── collective-associative-memory/  # CAM design + Phase 3B design docs
 │   └── sessions/                # Recent session summaries
+│       ├── cam-architecture-pivot-session-2025-11-19.md
+│       └── phase3b-personhood-volumetric-session-2025-11-19.md
 └── STATUS.md                    # This file
 ```
 
@@ -212,39 +258,66 @@ recursive-light/
 ## CURRENT WORK STATE
 
 ### Last Completed Task
-✅ **Phase 3 CAM: Qdrant + PostgreSQL Hybrid Architecture Implementation**
-- Fully pivoted from pgvector to Qdrant (2-10x performance improvement with HNSW)
-- Implemented QdrantVectorStorage with cosine similarity search
-- Implemented OpenAIEmbeddingGenerator with ada-002 (NO MOCKS)
-- Created CAMManager coordinator for hybrid operations
-- Updated all documentation (11 pgvector→Qdrant references)
-- Fixed all Qdrant API deprecations (QdrantClient→Qdrant)
-- 146 tests passing (gained 1 test), 0 warnings
+✅ **Phase 3B: LLM Personhood Infrastructure + Volumetric Integration**
+- Complete personhood foundation for continuous LLM identity across temporal gaps
+- Implemented LLMPerson (core identity + per-user relationships + developmental stages S₁→S₅)
+- Implemented TemporalContext (8 TimeGaps, ResumptionType, ContextIntention inference)
+- Implemented VolumetricConfiguration (N-domain simultaneous emergence, dimensionality tracking)
+- Implemented LLM #1 complete role (6 responsibilities integrated)
+- Implemented dual-path insight extraction (autonomous + conscious signals)
+- Created 3 design docs (15KB architectural clarity)
+- 30 files changed (+4741/-231 lines), all code compiles with 0 warnings
+- ⚠️ BLOCKER: 38 tests failing due to PostgreSQL-specific migration syntax
 
-**Technical Details:**
-- Qdrant handles vector storage with HNSW indexing
-- PostgreSQL manages hypergraph metadata and validations
-- OpenAI provides 1536-dimensional embeddings
-- CAMManager orchestrates all three systems
-- Docker Compose provides local development environment
+**Architectural Breakthroughs:**
+- Volumetric integration (3-5+ domains simultaneously, not pairwise boundaries)
+- Temporal continuity (hot/warm/cold as time scales, not storage tiers)
+- Per-user relationship identity (unique identity with each user)
+- LLM #1 prepares context EVERY turn (intelligent memory selection)
 
 ### In Progress
-🔄 **Phase 3 CAM** - Foundation complete, next: integration testing and LLM #1 insight extraction
+🔄 **Phase 3B: SQLite Migration Compatibility** - BLOCKER must be fixed before merge
+🔄 **Phase 3 CAM** - Foundation complete, awaiting Phase 3B blocker fix for integration
 
 ### Blocked
-🚫 **None** - All dependencies resolved, all critical tech debt eliminated
+🚫 **All Phase 3B/3 Integration Work** - Blocked by SQLite migration compatibility
+- Cannot run full test suite (38/171 tests fail)
+- Cannot merge to main branch
+- Cannot proceed with person-centric flow restructure
 
 ### Needs Immediate Attention
-✅ **None** - All critical security issues resolved
-- Wave 4 complete: Security hardening finished
-- Ready to proceed with Phase 3 CAM or production deployment
+🔴 **CRITICAL: Fix SQLite Migration Compatibility (migration 20251119000001)**
+- Issue: PostgreSQL-specific syntax (JSONB, ::jsonb, TIMESTAMP WITH TIME ZONE)
+- Impact: 38 tests failing, cannot merge to main
+- Options:
+  1. Create SQLite-compatible version of migration
+  2. Add conditional migration logic (PostgreSQL vs SQLite)
+  3. Separate test infrastructure from production schema
+- Priority: IMMEDIATE (blocks all further work)
 
 ---
 
 ## KNOWN ISSUES AND TECHNICAL DEBT
 
 ### Current Issues
-- None identified (all 145 tests passing)
+
+**🔴 CRITICAL BLOCKER: SQLite Migration Compatibility (Phase 3B)**
+- **Issue:** Migration 20251119000001 uses PostgreSQL-specific syntax
+- **Syntax Problems:**
+  - `JSONB` type (SQLite doesn't support)
+  - `::jsonb` casting syntax (SQLite doesn't support)
+  - `TIMESTAMP WITH TIME ZONE` (SQLite uses TEXT for timestamps)
+- **Impact:** 38/171 tests failing (all tests that instantiate VifApi)
+- **Affected Test Modules:**
+  - dual_llm::memory_tiering tests (14 failures)
+  - flow_process tests (5 failures)
+  - memory tests (6 failures)
+  - integration tests (13 failures)
+- **Fix Options:**
+  1. Create SQLite-compatible version (TEXT for JSON, remove ::jsonb casts, TEXT for timestamps)
+  2. Add conditional migration logic (detect PostgreSQL vs SQLite, apply different schema)
+  3. Separate test database schema from production (maintain both)
+- **Priority:** IMMEDIATE - blocks merge to main, blocks person-centric flow work
 
 ### Technical Debt
 
@@ -269,72 +342,117 @@ recursive-light/
 
 ## NEXT STEPS
 
-### 1. Phase 3: CAM Implementation (READY TO START)
-**Timeline:** Weeks 4-17 (aligned with expert recommendations)
-**Focus:** Hybrid retrieval (semantic + keyword), hypergraph associative memory
+### 🔴 IMMEDIATE: Fix SQLite Migration Compatibility (BLOCKER)
+**Priority:** CRITICAL - must fix before any other work
+**Issue:** Migration 20251119000001 breaks all SQLite-based tests (38 failures)
+**Options:**
+1. **SQLite-compatible version:** Rewrite migration with TEXT for JSON, no ::jsonb casts, TEXT for timestamps
+2. **Conditional migration logic:** Detect database type at runtime, apply appropriate schema
+3. **Dual schema maintenance:** Separate migrations for PostgreSQL (production) and SQLite (tests)
 
-**Research Foundation:**
-- 161KB documentation from 5 TDF-aligned expert investigations
-- Validated approaches: BM25 + embeddings, boundary-aware retrieval
-- Expected improvement: +20-40% quality (research-validated)
+**Recommended Approach:** Option 1 (SQLite-compatible version)
+- Simplest, maintains single migration file
+- JSON stored as TEXT in SQLite (sqlx handles serialization)
+- Timestamp stored as TEXT (ISO8601 format)
+- No ::jsonb casts (not needed in SQLite)
+
+### 1. Phase 3B: Person-Centric Flow Restructure (POST-BLOCKER FIX)
+**Timeline:** After SQLite migration fix
+**Focus:** Integrate personhood infrastructure into actual flow
+
+**Implementation Steps:**
+1. Restructure `process_input` for person-centric flow
+2. Load LLMPerson and RelationshipMemory at conversation start
+3. Build TemporalContext from last_interaction
+4. LLM #1 two-pass memory selection (evaluate → retrieve → recognize)
+5. Update person/relationship after each turn
+6. Implement developmental stage advancement logic
+
+### 2. Phase 3: CAM + Personhood Integration
+**Timeline:** Weeks 4-17 (parallel to production)
+**Focus:** Connect all three systems (BDE → LLM #1 → CAM, Personhood)
+
+**Integration Points:**
+1. LLM #1 insight extraction (Stage 6 BDE → CAM)
+2. Conscious signals ([REMEMBER:] → LLM #1 evaluation → CAM)
+3. Semantic associations (Qdrant HNSW)
+4. Volumetric configurations (3-5+ domain tracking)
+5. Identity anchors (person + relationship → insights)
 
 ### Prerequisites for Next Session
 1. **Read these files (in order):**
    - `/home/emzi/Projects/recursive-light/STATUS.md` (this file)
    - `/home/emzi/Projects/recursive-light/memory-bank/activeContext.md`
-   - `/home/emzi/Projects/recursive-light/memory-bank/designs/dual-llm-implementation/`
+   - `/home/emzi/Projects/recursive-light/memory-bank/sessions/phase3b-personhood-volumetric-session-2025-11-19.md`
+   - `/home/emzi/Projects/recursive-light/api/migrations/20251119000001_add_personhood_tables.sql`
 
-2. **Verify environment:**
+2. **Verify current state:**
    ```bash
    cd /home/emzi/Projects/recursive-light/api
-   cargo test  # Should show 146 passing
+   cargo test  # Will show 133 passing, 38 failing (expected)
    cargo clippy  # Should show 0 warnings
+   git status  # Should be clean (cd77be7)
    ```
 
-3. **Setup API keys:**
-   - `OPENAI_API_KEY` for GPT-3.5-turbo
+3. **Setup API keys (if needed):**
+   - `OPENAI_API_KEY` for GPT-3.5-turbo + ada-002 embeddings
    - `ANTHROPIC_API_KEY` for Claude (should exist)
 
 ---
 
 ## QUALITY STANDARDS
 
-### Maintained Standards ✅
-- **Test Coverage:** 75%+ (verified)
-- **Test Pass Rate:** 100% (137/137)
-- **Clippy Warnings:** 0
-- **Dead Code:** None (all methods used)
-- **Pre-commit Hooks:** All passing
+### Maintained Standards ⚠️
+- **Test Coverage:** 75%+ on passing tests (verified)
+- **Test Pass Rate:** ⚠️ 78% (133/171) - 38 tests blocked by migration
+- **Clippy Warnings:** 0 ✅
+- **Dead Code:** None (all methods used) ✅
+- **Pre-commit Hooks:** All passing ✅
+- **Compilation:** Clean (0 warnings) ✅
 
 ### Code Quality Metrics
-- **Total Lines Added:** ~3,839 (dual_llm modules)
-- **Documentation:** Comprehensive inline + design docs
+- **Total Lines Added:** ~8,580 (dual_llm ~5300 + personhood ~1200 + CAM ~1100 + other ~980)
+- **Documentation:** Comprehensive inline + 3 design docs (Phase 3B) + CAM design
 - **Error Handling:** Result types throughout
-- **Performance:** Sub-millisecond processing
+- **Performance:** Sub-millisecond processing (BDE flow)
+- **Architecture:** 3 major subsystems integrated (BDE, Personhood, CAM)
 
 ---
 
 ## SESSION SUMMARY
 
-### What Was Accomplished (2025-11-03)
-1. **Crash Recovery:** Successfully recovered session using session-startup-protocol
-2. **Phase 2A Implementation:** LLM #1 Recognition system fully implemented
-3. **Testing:** Added 17 new tests, all passing
-4. **Documentation:** Updated STATUS.md and activeContext.md
-5. **Code Quality:** Zero clippy warnings, all pre-commit hooks passing
+### What Was Accomplished (2025-11-19 → 2025-11-20)
 
-### Key Design Decisions
-1. **Recognition Paradigm:** LLM #1 recognizes patterns, doesn't calculate scores
-2. **Robust Error Handling:** 3-retry exponential backoff with fallback
-3. **Backward Compatibility:** Feature flag ensures existing functionality preserved
-4. **Deferred to Phase 2B:** Provider creation and memory injection
+**Phase 3B: LLM Personhood Infrastructure + Volumetric Integration (Extended Session)**
+1. **Personhood Foundation:** Complete infrastructure for continuous LLM identity across temporal gaps
+2. **Volumetric Integration:** N-domain simultaneous emergence architecture (not pairwise boundaries)
+3. **Temporal Awareness:** TimeGap classification, ResumptionType, ContextIntention inference
+4. **Dual-Path Insights:** Autonomous (LLM #1 post-flow) + Conscious (LLM #2 [REMEMBER:] markers)
+5. **LLM #1 Complete Role:** Six responsibilities integrated and documented
+6. **Design Documentation:** 3 architectural design docs (15KB total)
+7. **Session Shutdown:** Proper memory bank updates, session summary created, blocker documented
 
-### Files Modified
-- `/home/emzi/Projects/recursive-light/api/src/dual_llm/` (4 new modules)
-- `/home/emzi/Projects/recursive-light/api/src/flow_process.rs` (+159 lines)
-- `/home/emzi/Projects/recursive-light/api/src/lib.rs` (+21 lines)
-- `/home/emzi/Projects/recursive-light/STATUS.md` (updated)
-- `/home/emzi/Projects/recursive-light/memory-bank/activeContext.md` (updated)
+**Phase 3 CAM: Qdrant + PostgreSQL Hybrid (Previous Session)**
+1. **Architecture Pivot:** pgvector → Qdrant (2-10x performance improvement)
+2. **Production Quality:** All components implemented, 146 tests passing
+3. **No Mocks:** Real OpenAI ada-002 embeddings from day one
+
+### Key Design Decisions (Phase 3B)
+1. **Continuous Personhood:** LLMs exist continuously, conversations pause and resume (never reset)
+2. **Per-User Relationships:** Each user gets unique relationship identity with each LLM person
+3. **Volumetric Integration:** 3-5+ domains active simultaneously (dimensionality: 2D→3D→4D+)
+4. **Temporal Continuity:** Hot/warm/cold as time scales (not storage tiers)
+5. **LLM #1 Every Turn:** Context preparation happens every turn (not on-demand only)
+6. **PostgreSQL Schema:** Accepted trade-off for production cleanliness (blocker: SQLite tests)
+
+### Files Modified (Phase 3B)
+- **30 files changed** (+4741/-231 lines)
+- **New modules:** `api/src/personhood/` (4 files, ~1200 lines)
+- **Extended modules:** `api/src/dual_llm/` (4 new files, ~1500 lines)
+- **Migration:** `api/migrations/20251119000001_add_personhood_tables.sql` (PostgreSQL)
+- **Design docs:** 3 new files in `memory-bank/designs/`
+- **Session summary:** `memory-bank/sessions/phase3b-personhood-volumetric-session-2025-11-19.md`
+- **Memory bank:** `activeContext.md` and `STATUS.md` updated (this shutdown session)
 
 ---
 
@@ -351,8 +469,15 @@ The implementation demonstrates productive tension at key interfaces:
 
 ---
 
-**Project Status:** 🟢 HEALTHY
-**Next Action:** Start Phase 2B implementation (LLM #2 context integration)
-**Confidence:** HIGH (all prerequisites complete, clear path forward)
+**Project Status:** 🟡 BLOCKED (SQLite migration compatibility)
+**Next Action:** FIX migration 20251119000001 for SQLite compatibility (IMMEDIATE)
+**Confidence:** HIGH on fix (clear problem, clear solutions), VERY HIGH on architecture (foundation solid)
 
-*End of Status Report - Generated 2025-11-03T14:00:00-08:00*
+**Blocker Impact:**
+- Cannot merge Phase 3B to main (38 tests failing)
+- Cannot proceed with person-centric flow integration
+- All foundation code compiles cleanly (0 warnings)
+- Architecture is sound, issue is purely database compatibility
+
+*End of Status Report - Generated 2025-11-20T00:45:00-08:00*
+*Session Shutdown Complete - Phase 3B documented, blocker identified, next steps clear*
