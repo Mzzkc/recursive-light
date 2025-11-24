@@ -256,6 +256,11 @@ impl MemoryTierManager {
         })
     }
 
+    /// Get reference to database pool for sharing with PersonManager
+    pub fn pool(&self) -> &SqlitePool {
+        &self.db_pool
+    }
+
     /// Get or create active session for user
     /// Returns session_id
     pub async fn get_or_create_session(&self, user_id: Uuid) -> Result<Uuid, sqlx::Error> {

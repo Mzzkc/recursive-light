@@ -2,7 +2,7 @@
 // Phase 3B: Persistent storage for continuous personhood
 
 use sqlx::types::Uuid;
-use sqlx::{PgPool, Row};
+use sqlx::{Row, SqlitePool};
 
 use super::person::{DevelopmentalStage, LLMPerson, PersonId};
 use super::relationship::RelationshipMemory;
@@ -10,7 +10,7 @@ use crate::dual_llm::IdentityAnchor;
 
 /// Manager for LLM person persistence
 pub struct PersonManager {
-    pool: PgPool,
+    pool: SqlitePool,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -27,7 +27,7 @@ pub enum PersonError {
 
 impl PersonManager {
     /// Create new PersonManager
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         Self { pool }
     }
 
@@ -169,7 +169,7 @@ impl PersonManager {
         Ok(())
     }
 
-    fn row_to_person(&self, row: sqlx::postgres::PgRow) -> Result<LLMPerson, PersonError> {
+    fn row_to_person(&self, row: sqlx::sqlite::SqliteRow) -> Result<LLMPerson, PersonError> {
         let core_identity_json: serde_json::Value = row.try_get("core_identity")?;
         let core_identity: Vec<IdentityAnchor> = serde_json::from_value(core_identity_json)?;
 
@@ -202,7 +202,7 @@ impl PersonManager {
 
     fn row_to_relationship(
         &self,
-        row: sqlx::postgres::PgRow,
+        row: sqlx::sqlite::SqliteRow,
     ) -> Result<RelationshipMemory, PersonError> {
         let anchors_json: serde_json::Value = row.try_get("relationship_anchors")?;
         let relationship_anchors = serde_json::from_value(anchors_json)?;

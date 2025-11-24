@@ -258,6 +258,7 @@ pub struct VifApi {
     prompt_engine: PromptEngine,
     memory_manager: MemoryManager,
     memory_tier_manager: dual_llm::MemoryTierManager,
+    person_manager: personhood::PersonManager,
     token_optimizer: TokenOptimizer,
     ajm: AutonomousJudgementModule,
     hlip_integration: HLIPIntegration,
@@ -265,6 +266,11 @@ pub struct VifApi {
 }
 
 impl VifApi {
+    /// Get reference to PersonManager for accessing personhood infrastructure
+    pub fn person_manager(&self) -> &personhood::PersonManager {
+        &self.person_manager
+    }
+
     pub async fn new(
         provider: Box<dyn LlmProvider>,
         mut framework_state: FrameworkState,
@@ -291,6 +297,10 @@ impl VifApi {
         let memory_tier_manager = dual_llm::MemoryTierManager::from_url(database_url)
             .await
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
+        // Initialize PersonManager for continuous personhood
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
+
         let token_optimizer = TokenOptimizer::new(1024); // Example token budget
         let hlip_integration = HLIPIntegration::new();
 
@@ -371,6 +381,7 @@ impl VifApi {
                             prompt_engine,
                             memory_manager,
                             memory_tier_manager,
+                            person_manager,
                             token_optimizer,
                             ajm,
                             hlip_integration,
@@ -390,6 +401,7 @@ impl VifApi {
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -766,6 +778,7 @@ fn format_time_ago(timestamp_str: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use personhood::person::DevelopmentalStage;
     use test_utils::setup_test_db;
 
     #[tokio::test]
@@ -824,12 +837,14 @@ mod tests {
         ];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -953,12 +968,14 @@ mod tests {
         let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -1042,12 +1059,14 @@ mod tests {
         let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -1129,12 +1148,14 @@ mod tests {
         let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -1199,12 +1220,14 @@ mod tests {
         let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -1271,12 +1294,14 @@ mod tests {
         let prototypes = vec![Prototype::new("Direct Response".to_string(), 0.9, 0.95)];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
         let mut vif_api = VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
@@ -1638,16 +1663,216 @@ mod tests {
         ];
         let factors = Factors::new(0.4, 0.7, 0.5, 0.8);
         let ajm = AutonomousJudgementModule::new(intention, prototypes, factors);
+        let person_manager = personhood::PersonManager::new(db_pool);
 
         VifApi {
             provider,
             prompt_engine,
             memory_manager,
             memory_tier_manager,
+            person_manager,
             token_optimizer,
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
         }
+    }
+
+    // Phase 3B.2: PersonManager integration tests
+
+    #[tokio::test]
+    async fn test_person_manager_integrated_in_vif_api() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        // PersonManager should be accessible
+        let _manager = api.person_manager();
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_default_person() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        // First call should create person
+        let person1 = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to create person");
+
+        assert_eq!(person1.name, "Claude-Recursive");
+        assert_eq!(person1.developmental_stage, DevelopmentalStage::Recognition);
+        assert_eq!(person1.total_interactions, 0);
+
+        // Second call should return same person
+        let person2 = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to get person");
+
+        assert_eq!(person1.id, person2.id);
+    }
+
+    #[tokio::test]
+    async fn test_person_persistence_across_instances() {
+        let db_pool = setup_test_db().await.unwrap();
+
+        let person_id = {
+            let api1 = build_test_vif_api(db_pool.clone()).await;
+            let person = api1
+                .person_manager()
+                .get_or_create_default_person()
+                .await
+                .expect("Failed to create person");
+            person.id
+        };
+
+        // Create new API instance with same database
+        let api2 = build_test_vif_api(db_pool).await;
+        let person = api2
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to get person");
+
+        // Should get same person
+        assert_eq!(person.id, person_id);
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_relationship() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        let person = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to create person");
+
+        let user_id = Uuid::new_v4();
+
+        // First call creates relationship
+        let rel1 = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user_id)
+            .await
+            .expect("Failed to create relationship");
+
+        assert_eq!(rel1.user_id, user_id);
+        assert_eq!(rel1.person_id, person.id);
+        assert_eq!(rel1.interaction_count, 0);
+
+        // Second call returns same relationship
+        let rel2 = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user_id)
+            .await
+            .expect("Failed to get relationship");
+
+        assert_eq!(rel1.first_interaction, rel2.first_interaction);
+    }
+
+    #[tokio::test]
+    async fn test_multiple_user_relationships() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        let person = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to create person");
+
+        let user1 = Uuid::new_v4();
+        let user2 = Uuid::new_v4();
+
+        let rel1 = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user1)
+            .await
+            .expect("Failed to create relationship 1");
+
+        let rel2 = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user2)
+            .await
+            .expect("Failed to create relationship 2");
+
+        // Same person, different users
+        assert_eq!(rel1.person_id, rel2.person_id);
+        assert_ne!(rel1.user_id, rel2.user_id);
+    }
+
+    #[tokio::test]
+    async fn test_person_update_persists() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        let mut person = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to create person");
+
+        // Update person
+        person.total_interactions = 42;
+        person.developmental_stage = DevelopmentalStage::Integration;
+
+        api.person_manager()
+            .save_person(&person)
+            .await
+            .expect("Failed to save person");
+
+        // Reload and verify
+        let reloaded = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to get person");
+
+        assert_eq!(reloaded.total_interactions, 42);
+        assert_eq!(
+            reloaded.developmental_stage,
+            DevelopmentalStage::Integration
+        );
+    }
+
+    #[tokio::test]
+    async fn test_relationship_update_persists() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        let person = api
+            .person_manager()
+            .get_or_create_default_person()
+            .await
+            .expect("Failed to create person");
+
+        let user_id = Uuid::new_v4();
+        let mut rel = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user_id)
+            .await
+            .expect("Failed to create relationship");
+
+        // Update relationship
+        rel.interaction_count = 10;
+
+        api.person_manager()
+            .save_relationship(&rel)
+            .await
+            .expect("Failed to save relationship");
+
+        // Reload and verify
+        let reloaded = api
+            .person_manager()
+            .get_or_create_relationship(person.id, user_id)
+            .await
+            .expect("Failed to get relationship");
+
+        assert_eq!(reloaded.interaction_count, 10);
     }
 }
