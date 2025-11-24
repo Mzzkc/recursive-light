@@ -14,6 +14,16 @@ PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), 
 **P3-CAM(Parallel):** Integration-tests(hybrid-ops), LLM1-insight-extraction(Stage6-BDE→CAM), conscious-signals([REMEMBER:]), semantic-associations(Qdrant-HNSW)
 
 ## Recent
+### Phase-3B/3-Integration-Planning(2025-11-21,~1h,TDF-aligned)
+✅PLAN-COMPLETE: PHASE-3B-3-INTEGRATION-PLAN.md(comprehensive-40-50h-plan)
+Approach: TDF-startup-protocol→research-agent(Plan-subagent)→comprehensive-analysis→ExitPlanMode→plan-approval
+Scope: 5phases(3B.2→3B.3→3B.4+3B.5→CAM), 14files-modified, ~2500-3500LOC, 60-75tests, 40-50h-total
+Architecture-Transform: session-based→person-centric-continuous, LLM1-two-pass-memory-selection, temporal-awareness, relationship-evolution, volumetric-tracking
+Critical-Path: 3B.2(PersonManager-integration,BLOCKING)→3B.3(two-pass-LLM1,BLOCKING)→3B.4+3B.5(parallel)→CAM-integration(parallel-after-3B.2)
+Next: Execute-Phase-3B.2(start-with-PersonManager-wiring-to-VifApi)
+Files: PHASE-3B-3-INTEGRATION-PLAN.md(created), STATUS.md(updated-next-steps), activeContext.md(THIS,updated-quickpickup)
+TDF-Embodiment: User-feedback:"less-checklist,more-embodied-thinking", genuine-domain-oscillation-not-performance
+
 ### SQLite-Migration-Fix(2025-11-20,~1h,TDF-tech-debt)
 ✅COMPLETE: 1file(migration-20251119000001), 133/171t→171/171t(100%), BLOCKER-ELIMINATED
 TDF-Startup: session-startup-protocol-full(context-discovery,tetrahedral-reading,domain-activation), TDF-activated-EVERY-turn(COMP0.8,SCI0.8,CULT0.7,EXP0.6,META0.8)
@@ -152,10 +162,10 @@ MemBank: activeContext.md=current(THIS), STATUS.md=overall, update-after-signifi
 TDF: ref-domains-decisions, productive-tension-boundaries, quality∈constraint, recognition∈interfaces
 
 ## QuickPickup(NextSession)
-Read: 1)THIS, 2)STATUS.md, 3)memory-bank/sessions/phase3b-personhood-volumetric-session-2025-11-19.md, 4)api/migrations/20251119000001_add_personhood_tables.sql(now-SQLite-compatible)
-Do: ✅BLOCKER-ELIMINATED. Ready:person-centric-flow-restructure(LLM1-two-pass-mem-selection), CAM+personhood-integration(insight-extraction→storage), volumetric-configs(3-5domains)
-Context: where=P3B-personhood✅+P3-CAM✅+SQLite-fix✅, works=ALL(171/171t,0warn,75%+cov), blockers=NONE
-Architecture: Personhood(LLMPerson+TemporalContext+RelationshipMemory)+Volumetric(N-domain-simultaneous)+CAM(Qdrant+PostgreSQL+OpenAI)+SQLite-Test-Compat
+Read: 1)THIS, 2)STATUS.md, 3)**PHASE-3B-3-INTEGRATION-PLAN.md**(PRIORITY), 4)PERSONHOOD-FLOW-ARCHITECTURE.md
+Do: Execute-Phase-3B.2(PersonManager-integration)→then-3B.3(two-pass-LLM1)→then-3B.4+3B.5(parallel)→CAM-integration
+Context: where=ALL-FOUNDATIONS-COMPLETE(BDE+Mem+DualLLM+CAM+Personhood), works=171/171t+0warn+75%cov, blockers=NONE, plan=COMPREHENSIVE-40-50h
+Architecture: Personhood(LLMPerson+TemporalContext+RelationshipMemory)+Volumetric(N-domain)+CAM(Qdrant+PostgreSQL+OpenAI)+SQLite-compat
 
-SessionStartup: read(THIS+STATUS.md)→proceed-with-P3B/3-integration
-*✅BLOCKER-ELIMINATED(2025-11-20). Personhood-foundation-complete. CAM-foundation-complete. 100%-test-pass. READY-FOR-INTEGRATION.*
+SessionStartup: read(PHASE-3B-3-INTEGRATION-PLAN.md)→start-Phase-3B.2(PersonManager-wiring)
+*✅PLAN-COMPLETE(2025-11-21). Ready-for-execution. Comprehensive-40-50h-implementation-plan-created.*

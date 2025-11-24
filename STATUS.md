@@ -289,10 +289,12 @@ recursive-light/
 *None - All blockers eliminated*
 
 ### Needs Attention (Next Steps)
-✅ **Phase 3B/3 Integration** - Foundation complete, ready to proceed
-- Person-centric flow restructure (LLM #1 two-pass memory selection)
-- CAM + Personhood integration (insight extraction → CAM storage)
-- Volumetric configurations (3-5+ domain tracking)
+✅ **Phase 3B/3 Integration** - Foundation complete, comprehensive plan created (2025-11-21)
+- **Implementation Plan**: `/home/emzi/Projects/recursive-light/PHASE-3B-3-INTEGRATION-PLAN.md`
+- **Scope**: 40-50 hours, ~2500-3500 LOC, 60-75 tests, 14 files
+- **Critical Path**: Phase 3B.2 → 3B.3 → 3B.4+3B.5 (parallel) → CAM integration
+- **Start With**: Phase 3B.2 (PersonManager integration, 6-8 hours)
+- See plan document for detailed implementation steps, testing strategy, and success criteria
 
 ---
 
