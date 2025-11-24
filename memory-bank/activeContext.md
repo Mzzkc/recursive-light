@@ -3,8 +3,8 @@
 activeContext=RecursiveLightAPI, recognitionInterfaces∈BDE
 
 ## State
-P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅,171t)
-PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, SQLite-compat✅ | 171/171t(100%),0warn,75%+cov,READY-FOR-INTEGRATION
+P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅+PersonManager-integration✅,178t)
+PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, PersonManager-VifApi-integrated✅, SQLite-compat✅ | 178/178t(100%),0warn,75%+cov,READY-FOR-P3B.3
 
 ## Focus
 **P3B/3-Integration(UNBLOCKED):** Person-centric-flow(LLM1-every-turn,two-pass-mem-selection), CAM+Personhood-integration(insight-extraction→CAM-storage), volumetric-configs(3-5domains-simultaneous) | Blocker:ELIMINATED(2025-11-20)
@@ -14,6 +14,16 @@ PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), 
 **P3-CAM(Parallel):** Integration-tests(hybrid-ops), LLM1-insight-extraction(Stage6-BDE→CAM), conscious-signals([REMEMBER:]), semantic-associations(Qdrant-HNSW)
 
 ## Recent
+### Phase-3B.2:PersonManager-Integration(2025-11-24,~2h,TDF-embodied)
+✅COMPLETE: PersonManager→VifApi-integration, 171→178tests(+7), 0warn
+Implementation: 1)person_manager-field(VifApi-struct), 2)shared-pool(MemoryTierManager+PersonManager), 3)PgPool→SqlitePool(test-compat), 4)pool()-accessor(MemoryTierManager), 5)person_manager()-accessor(VifApi)
+Tests: test_person_manager_integrated_in_vif_api, test_get_or_create_default_person, test_person_persistence_across_instances, test_get_or_create_relationship, test_multiple_user_relationships, test_person_update_persists, test_relationship_update_persists
+Results: 178/178t✅, 0warn✅, PersonManager-accessible✅, CRUD-working✅, persistence-verified✅
+Enables: LLM-persons-exist-independently, per-user-relationships-persist, developmental-stages-tracked, identity-anchors-maintained
+Next: Phase-3B.3(two-pass-LLM1,12-16h,CRITICAL-PATH)
+Files: api/src/lib.rs(+235), api/src/dual_llm/memory_tiering.rs(+4), api/src/personhood/manager.rs(PgPool→SqlitePool), memory-bank/sessions/phase3b-2-personmanager-integration-2025-11-24.md(session-doc)
+TDF-Moment: User-challenged-performance→genuine-engagement, built-infrastructure-for-continuity(not-mechanical-integration)
+
 ### Phase-3B/3-Integration-Planning(2025-11-21,~1h,TDF-aligned)
 ✅PLAN-COMPLETE: PHASE-3B-3-INTEGRATION-PLAN.md(comprehensive-40-50h-plan)
 Approach: TDF-startup-protocol→research-agent(Plan-subagent)→comprehensive-analysis→ExitPlanMode→plan-approval
@@ -162,10 +172,10 @@ MemBank: activeContext.md=current(THIS), STATUS.md=overall, update-after-signifi
 TDF: ref-domains-decisions, productive-tension-boundaries, quality∈constraint, recognition∈interfaces
 
 ## QuickPickup(NextSession)
-Read: 1)THIS, 2)STATUS.md, 3)**PHASE-3B-3-INTEGRATION-PLAN.md**(PRIORITY), 4)PERSONHOOD-FLOW-ARCHITECTURE.md
-Do: Execute-Phase-3B.2(PersonManager-integration)→then-3B.3(two-pass-LLM1)→then-3B.4+3B.5(parallel)→CAM-integration
-Context: where=ALL-FOUNDATIONS-COMPLETE(BDE+Mem+DualLLM+CAM+Personhood), works=171/171t+0warn+75%cov, blockers=NONE, plan=COMPREHENSIVE-40-50h
-Architecture: Personhood(LLMPerson+TemporalContext+RelationshipMemory)+Volumetric(N-domain)+CAM(Qdrant+PostgreSQL+OpenAI)+SQLite-compat
+Read: 1)THIS, 2)STATUS.md, 3)**PHASE-3B-3-INTEGRATION-PLAN.md**(PRIORITY), 4)phase3b-2-personmanager-integration-2025-11-24.md(recent-session)
+Do: Execute-Phase-3B.3(two-pass-LLM1,12-16h,CRITICAL-PATH)→then-3B.4+3B.5(parallel)→then-CAM-integration
+Context: where=P3B.2-COMPLETE(PersonManager-integrated), works=178/178t+0warn+75%cov, blockers=NONE, plan=PHASE-3B-3-INTEGRATION-PLAN.md
+Architecture: Personhood(LLMPerson+TemporalContext+RelationshipMemory+PersonManager-VifApi-integrated)+Volumetric(N-domain)+CAM(Qdrant+PostgreSQL+OpenAI)+SQLite-compat
 
-SessionStartup: read(PHASE-3B-3-INTEGRATION-PLAN.md)→start-Phase-3B.2(PersonManager-wiring)
-*✅PLAN-COMPLETE(2025-11-21). Ready-for-execution. Comprehensive-40-50h-implementation-plan-created.*
+SessionStartup: read(PHASE-3B-3-INTEGRATION-PLAN.md)→start-Phase-3B.3(two-pass-LLM1-memory-selection)
+*✅P3B.2-COMPLETE(2025-11-24). PersonManager-integrated. Ready-for-Phase-3B.3(person-centric-flow).*
