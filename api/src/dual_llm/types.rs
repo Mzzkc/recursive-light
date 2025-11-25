@@ -99,6 +99,50 @@ pub struct MemorySelectionGuidance {
     pub reasoning: String,
 }
 
+/// Retrieved memories based on LLM #1 guidance (Phase 3B.3)
+/// This is what we actually fetched from memory tiers - the bridge between
+/// first-pass guidance and second-pass recognition.
+#[derive(Debug, Clone, Default)]
+pub struct RetrievedMemories {
+    /// Warm memory context (from current session, if retrieved)
+    pub warm_context: String,
+
+    /// Cold memory context (from previous sessions, if retrieved)
+    pub cold_context: String,
+
+    /// Temporal framing from guidance (passed through for context formatting)
+    pub temporal_context: String,
+
+    /// Whether any memories were actually found
+    pub has_content: bool,
+}
+
+impl RetrievedMemories {
+    /// Create empty retrieved memories (when no retrieval needed)
+    pub fn empty() -> Self {
+        Self::default()
+    }
+
+    /// Format for injection into LLM #2 context
+    pub fn format_for_llm(&self) -> String {
+        if !self.has_content {
+            return String::new();
+        }
+
+        let mut sections = Vec::new();
+
+        if !self.warm_context.is_empty() {
+            sections.push(self.warm_context.clone());
+        }
+
+        if !self.cold_context.is_empty() {
+            sections.push(self.cold_context.clone());
+        }
+
+        sections.join("\n")
+    }
+}
+
 /// Memory selection guidance from LLM #1 second pass (Advanced - not yet used)
 /// Detailed "how to retrieve it" structure with significance tuning
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -905,5 +949,293 @@ mod tests {
             legacy.reasoning,
             "I recognize strong computational perspective emerging"
         );
+    }
+
+    // VolumetricConfiguration tests
+
+    fn create_test_quality_conditions() -> QualityConditions {
+        QualityConditions {
+            clarity_potential: 0.8,
+            depth_potential: 0.7,
+            precision_potential: 0.6,
+            fluidity_potential: 0.5,
+            resonance_potential: 0.4,
+            openness_potential: 0.75,
+            coherence_potential: 0.85,
+            reasoning: "Test quality conditions".to_string(),
+        }
+    }
+
+    fn create_test_boundary_state(permeability: f64) -> BoundaryState {
+        BoundaryState {
+            permeability,
+            status: if permeability > 0.8 {
+                "Transcendent"
+            } else if permeability > 0.6 {
+                "Transitional"
+            } else {
+                "Maintained"
+            }
+            .to_string(),
+            tension_detected: false,
+            tension_type: "neutral".to_string(),
+            integration_invitation: "Test invitation".to_string(),
+            resonance_note: "Test note".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_volumetric_config_requires_two_domains() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.7); // Only one active domain
+
+        let boundary_states = HashMap::new();
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        );
+
+        assert!(
+            config.is_none(),
+            "Should return None with only 1 active domain"
+        );
+    }
+
+    #[test]
+    fn test_volumetric_config_two_domains_line() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.8);
+        domain_activations.insert("SD".to_string(), 0.7);
+        domain_activations.insert("CuD".to_string(), 0.3); // Below threshold
+        domain_activations.insert("ED".to_string(), 0.4); // Below threshold
+
+        let mut boundary_states = HashMap::new();
+        boundary_states.insert("CD-SD".to_string(), create_test_boundary_state(0.7));
+
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config with 2 domains");
+
+        assert_eq!(config.dimensionality, 1, "2 domains = 1D (line)");
+        assert_eq!(config.active_domains.len(), 2);
+        assert!(config.active_domains.contains(&"CD".to_string()));
+        assert!(config.active_domains.contains(&"SD".to_string()));
+    }
+
+    #[test]
+    fn test_volumetric_config_three_domains_plane() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.9);
+        domain_activations.insert("SD".to_string(), 0.8);
+        domain_activations.insert("ED".to_string(), 0.7);
+        domain_activations.insert("CuD".to_string(), 0.3); // Below threshold
+
+        let mut boundary_states = HashMap::new();
+        boundary_states.insert("CD-SD".to_string(), create_test_boundary_state(0.75));
+        boundary_states.insert("CD-ED".to_string(), create_test_boundary_state(0.65));
+        boundary_states.insert("SD-ED".to_string(), create_test_boundary_state(0.70));
+
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config with 3 domains");
+
+        assert_eq!(config.dimensionality, 2, "3 domains = 2D (plane)");
+        assert_eq!(config.active_domains.len(), 3);
+    }
+
+    #[test]
+    fn test_volumetric_config_four_domains_volume() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.9);
+        domain_activations.insert("SD".to_string(), 0.8);
+        domain_activations.insert("CuD".to_string(), 0.7);
+        domain_activations.insert("ED".to_string(), 0.6);
+
+        let mut boundary_states = HashMap::new();
+        for boundary in &["CD-SD", "CD-CuD", "CD-ED", "SD-CuD", "SD-ED", "CuD-ED"] {
+            boundary_states.insert(boundary.to_string(), create_test_boundary_state(0.7));
+        }
+
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config with 4 domains");
+
+        assert_eq!(config.dimensionality, 3, "4 domains = 3D (volume)");
+        assert_eq!(config.active_domains.len(), 4);
+        assert_eq!(config.involved_boundaries.len(), 6);
+    }
+
+    #[test]
+    fn test_volumetric_config_resonance_calculation() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.8);
+        domain_activations.insert("SD".to_string(), 0.7);
+
+        let mut boundary_states = HashMap::new();
+        boundary_states.insert("CD-SD".to_string(), create_test_boundary_state(0.9)); // High permeability
+
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config");
+
+        assert!(
+            (config.volumetric_resonance - 0.9).abs() < 0.01,
+            "Resonance should be 0.9 (average of involved boundary permeabilities)"
+        );
+    }
+
+    #[test]
+    fn test_volumetric_config_no_boundaries_defaults() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.8);
+        domain_activations.insert("SD".to_string(), 0.7);
+
+        let boundary_states = HashMap::new(); // No boundaries defined
+
+        let quality_conditions = create_test_quality_conditions();
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config even without boundaries");
+
+        assert!(
+            (config.volumetric_resonance - 0.5).abs() < 0.01,
+            "Resonance should default to 0.5 with no boundaries"
+        );
+    }
+
+    #[test]
+    fn test_volumetric_config_phenomenological_signature() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.8);
+        domain_activations.insert("SD".to_string(), 0.7);
+
+        let boundary_states = HashMap::new();
+
+        // Quality conditions with high clarity and coherence
+        let quality_conditions = QualityConditions {
+            clarity_potential: 0.8,
+            depth_potential: 0.5,
+            precision_potential: 0.5,
+            fluidity_potential: 0.5,
+            resonance_potential: 0.5,
+            openness_potential: 0.5,
+            coherence_potential: 0.8,
+            reasoning: "Test".to_string(),
+        };
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config");
+
+        // Signature should contain "clear" and "coherent" (both > 0.7)
+        assert!(
+            config.phenomenological_signature.contains("clear"),
+            "Signature should include 'clear'"
+        );
+        assert!(
+            config.phenomenological_signature.contains("coherent"),
+            "Signature should include 'coherent'"
+        );
+    }
+
+    #[test]
+    fn test_volumetric_config_emergent_quality() {
+        let mut domain_activations = HashMap::new();
+        domain_activations.insert("CD".to_string(), 0.8);
+        domain_activations.insert("SD".to_string(), 0.7);
+
+        let boundary_states = HashMap::new();
+        let quality_conditions = create_test_quality_conditions(); // coherence is highest at 0.85
+
+        let config = VolumetricConfiguration::from_activations(
+            &domain_activations,
+            &boundary_states,
+            &quality_conditions,
+        )
+        .expect("Should create config");
+
+        // Emergent quality should mention the highest quality (coherence)
+        assert!(
+            config.emergent_quality.contains("coherence"),
+            "Emergent quality should reference highest quality potential"
+        );
+    }
+
+    // RetrievedMemories tests
+
+    #[test]
+    fn test_retrieved_memories_empty() {
+        let memories = RetrievedMemories::empty();
+        assert!(!memories.has_content);
+        assert!(memories.warm_context.is_empty());
+        assert!(memories.cold_context.is_empty());
+    }
+
+    #[test]
+    fn test_retrieved_memories_format_empty() {
+        let memories = RetrievedMemories::empty();
+        let formatted = memories.format_for_llm();
+        assert!(
+            formatted.is_empty(),
+            "Empty memories should format to empty string"
+        );
+    }
+
+    #[test]
+    fn test_retrieved_memories_format_with_warm() {
+        let memories = RetrievedMemories {
+            warm_context: "# Earlier:\nUser: Hello\nAssistant: Hi".to_string(),
+            cold_context: String::new(),
+            temporal_context: "Continuing".to_string(),
+            has_content: true,
+        };
+
+        let formatted = memories.format_for_llm();
+        assert!(formatted.contains("Earlier"));
+        assert!(formatted.contains("Hello"));
+    }
+
+    #[test]
+    fn test_retrieved_memories_format_with_both() {
+        let memories = RetrievedMemories {
+            warm_context: "# Warm context".to_string(),
+            cold_context: "# Cold context".to_string(),
+            temporal_context: "Resuming".to_string(),
+            has_content: true,
+        };
+
+        let formatted = memories.format_for_llm();
+        assert!(formatted.contains("Warm context"));
+        assert!(formatted.contains("Cold context"));
     }
 }

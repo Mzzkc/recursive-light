@@ -1,11 +1,12 @@
 # Phase 3B/3 Integration Implementation Plan
 **Created**: 2025-11-21
-**Status**: Ready for execution
+**Updated**: 2025-11-25 (Phase 3B.3 first pass + retrieval complete)
+**Status**: Phase 3B.3 IN PROGRESS - First Pass + Retrieval Bridge COMPLETE
 **Estimated Effort**: 40-50 hours (1-2 weeks)
 
 ## Quick Reference
 
-**Current State**: All foundations complete, 171/171 tests passing, blocker eliminated
+**Current State**: Phase 3B.2 COMPLETE, Phase 3B.3 in progress, 202/202 tests passing
 **Goal**: Transform from session-based to person-centric continuous conversation
 **Critical Path**: Phase 3B.2 → 3B.3 → 3B.4+3B.5 (parallel) → Phase 3 CAM
 **Total Scope**: ~2500-3500 LOC, 60-75 new tests, 14 files modified
@@ -80,9 +81,10 @@ User message
 
 ## Implementation Phases
 
-### Phase 3B.2: PersonManager Integration (FIRST - BLOCKING)
+### Phase 3B.2: PersonManager Integration (COMPLETE ✅)
 **Timeline**: 6-8 hours
 **Files**: 2 modified, 8-12 tests added
+**Status**: COMPLETE (2025-11-24) - 178/178 tests passing → see commit 61ad966
 
 #### Changes:
 1. **VifApi struct** (lib.rs:256-265)
@@ -119,9 +121,18 @@ User message
 
 ---
 
-### Phase 3B.3: Two-Pass LLM #1 Context Preparation (CORE REFACTOR)
+### Phase 3B.3: Two-Pass LLM #1 Context Preparation (IN PROGRESS - FIRST PASS + RETRIEVAL COMPLETE)
 **Timeline**: 12-16 hours
 **Files**: 4 modified, 15-20 tests added
+**Progress (2025-11-25):**
+- ✅ `RetrievedMemories` struct (bridge type between first/second pass)
+- ✅ `retrieve_selected_memories()` (LLM #1 guided memory retrieval)
+- ✅ `build_llm1_second_pass_prompt()` (memory + temporal context in prompt)
+- ✅ `second_pass()` (full domain recognition with memories)
+- ✅ `FeatureDisabled` LlmError variant
+- ✅ 12 new tests (190→202 total)
+- ⏳ Refactor process_input() to use two-pass flow
+- ⏳ End-to-end testing with real LLM
 
 #### New Types (dual_llm/types.rs):
 ```rust

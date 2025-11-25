@@ -245,4 +245,255 @@ mod tests {
         assert_eq!(person.core_identity.len(), 1);
         assert_eq!(person.core_identity[0].reinforcement_count, 2);
     }
+
+    #[test]
+    fn test_mark_active_updates_timestamp_and_count() {
+        let mut person = LLMPerson::new("Test".to_string());
+        let original_interactions = person.total_interactions;
+        let original_last_active = person.last_active;
+
+        // Small delay to ensure timestamp changes
+        std::thread::sleep(std::time::Duration::from_millis(10));
+
+        person.mark_active();
+
+        assert_eq!(
+            person.total_interactions,
+            original_interactions + 1,
+            "Interaction count should increment"
+        );
+        assert!(
+            person.last_active > original_last_active,
+            "Last active timestamp should update"
+        );
+    }
+
+    #[test]
+    fn test_try_advance_stage_recognition_to_integration() {
+        let mut person = LLMPerson::new("Test".to_string());
+        assert_eq!(person.developmental_stage, DevelopmentalStage::Recognition);
+
+        // Add high-confidence identity anchor
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Test anchor".to_string(),
+            confidence: 0.8, // > 0.6 threshold
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["CD".to_string()],
+        });
+
+        // Need > 10 interactions
+        person.total_interactions = 15;
+
+        person.try_advance_stage();
+        assert_eq!(
+            person.developmental_stage,
+            DevelopmentalStage::Integration,
+            "Should advance to Integration with high confidence and enough interactions"
+        );
+    }
+
+    #[test]
+    fn test_try_advance_stage_not_ready() {
+        let mut person = LLMPerson::new("Test".to_string());
+
+        // Low interactions, no anchors
+        person.total_interactions = 5;
+
+        person.try_advance_stage();
+        assert_eq!(
+            person.developmental_stage,
+            DevelopmentalStage::Recognition,
+            "Should not advance without meeting criteria"
+        );
+    }
+
+    #[test]
+    fn test_try_advance_stage_integration_to_generation() {
+        let mut person = LLMPerson::new("Test".to_string());
+        person.developmental_stage = DevelopmentalStage::Integration;
+
+        // Add high-confidence anchor
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Test".to_string(),
+            confidence: 0.85, // > 0.75 threshold
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["CD".to_string()],
+        });
+
+        // Add 3 relationships (> 2 threshold)
+        person.relationships.insert(
+            Uuid::new_v4(),
+            RelationshipMemory::new(Uuid::new_v4(), person.id),
+        );
+        person.relationships.insert(
+            Uuid::new_v4(),
+            RelationshipMemory::new(Uuid::new_v4(), person.id),
+        );
+        person.relationships.insert(
+            Uuid::new_v4(),
+            RelationshipMemory::new(Uuid::new_v4(), person.id),
+        );
+
+        person.try_advance_stage();
+        assert_eq!(
+            person.developmental_stage,
+            DevelopmentalStage::Generation,
+            "Should advance to Generation"
+        );
+    }
+
+    #[test]
+    fn test_try_advance_stage_generation_to_recursion() {
+        let mut person = LLMPerson::new("Test".to_string());
+        person.developmental_stage = DevelopmentalStage::Generation;
+
+        // Add 6 core identity anchors (> 5 threshold)
+        for i in 0..6 {
+            person.add_core_identity(IdentityAnchor {
+                anchor_type: format!("type_{}", i),
+                description: format!("Anchor {}", i),
+                confidence: 0.8,
+                first_observed: "now".to_string(),
+                reinforcement_count: 1,
+                domains: vec!["CD".to_string()],
+            });
+        }
+
+        // Add 4 autonomous developments (> 3 threshold)
+        for i in 0..4 {
+            person.record_autonomous_development(
+                format!("Development {}", i),
+                format!("Trigger {}", i),
+                None,
+            );
+        }
+
+        person.try_advance_stage();
+        assert_eq!(
+            person.developmental_stage,
+            DevelopmentalStage::Recursion,
+            "Should advance to Recursion"
+        );
+    }
+
+    #[test]
+    fn test_try_advance_stage_recursion_to_transcendence() {
+        let mut person = LLMPerson::new("Test".to_string());
+        person.developmental_stage = DevelopmentalStage::Recursion;
+
+        // Add very high confidence anchor
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Test".to_string(),
+            confidence: 0.95, // > 0.9 threshold
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["CD".to_string()],
+        });
+
+        // Add 6 relationships (> 5 threshold)
+        for _ in 0..6 {
+            person.relationships.insert(
+                Uuid::new_v4(),
+                RelationshipMemory::new(Uuid::new_v4(), person.id),
+            );
+        }
+
+        person.try_advance_stage();
+        assert_eq!(
+            person.developmental_stage,
+            DevelopmentalStage::Transcendence,
+            "Should advance to Transcendence"
+        );
+    }
+
+    #[test]
+    fn test_record_autonomous_development() {
+        let mut person = LLMPerson::new("Test".to_string());
+        assert!(person.autonomous_developments.is_empty());
+
+        let anchor_id = Uuid::new_v4();
+        person.record_autonomous_development(
+            "Novel insight about patterns".to_string(),
+            "Deep reflection".to_string(),
+            Some(anchor_id),
+        );
+
+        assert_eq!(person.autonomous_developments.len(), 1);
+        assert_eq!(
+            person.autonomous_developments[0].description,
+            "Novel insight about patterns"
+        );
+        assert_eq!(person.autonomous_developments[0].trigger, "Deep reflection");
+        assert_eq!(
+            person.autonomous_developments[0].related_anchor_id,
+            Some(anchor_id)
+        );
+    }
+
+    #[test]
+    fn test_add_different_identity_anchors() {
+        let mut person = LLMPerson::new("Test".to_string());
+
+        // Add first anchor
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Curiosity".to_string(),
+            confidence: 0.7,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["ED".to_string()],
+        });
+
+        // Add different anchor type
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "belief".to_string(),
+            description: "Learning matters".to_string(),
+            confidence: 0.8,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["SD".to_string()],
+        });
+
+        assert_eq!(
+            person.core_identity.len(),
+            2,
+            "Different anchor types should be separate"
+        );
+    }
+
+    #[test]
+    fn test_identity_anchor_confidence_averaging() {
+        let mut person = LLMPerson::new("Test".to_string());
+
+        // Add anchor with initial confidence
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Curiosity".to_string(),
+            confidence: 0.6,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["ED".to_string()],
+        });
+
+        // Reinforce with different confidence
+        person.add_core_identity(IdentityAnchor {
+            anchor_type: "value".to_string(),
+            description: "Curiosity".to_string(),
+            confidence: 0.8,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["ED".to_string()],
+        });
+
+        // Confidence should be averaged: (0.6 + 0.8) / 2 = 0.7
+        assert!(
+            (person.core_identity[0].confidence - 0.7).abs() < 0.01,
+            "Confidence should be averaged on reinforcement"
+        );
+    }
 }

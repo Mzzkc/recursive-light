@@ -324,6 +324,173 @@ impl VifApi {
             .await
     }
 
+    /// Second pass: Full domain/boundary recognition with retrieved memories (Phase 3B.3)
+    ///
+    /// After first_pass() determines what memories to retrieve and retrieve_selected_memories()
+    /// fetches them, this method performs full domain/boundary recognition WITH that context.
+    /// LLM #1 now sees the conversation history before making recognition decisions.
+    pub async fn second_pass(
+        &self,
+        user_input: &str,
+        memories: Option<&dual_llm::RetrievedMemories>,
+        temporal_context: Option<&str>,
+    ) -> Result<dual_llm::Llm1Output, crate::llm_error::LlmError> {
+        // If dual-LLM disabled or no provider, return error
+        if !self.dual_llm_config.enabled {
+            return Err(crate::llm_error::LlmError::FeatureDisabled {
+                feature: "dual_llm".to_string(),
+            });
+        }
+
+        let Some(llm1_provider) = &self.llm1_provider else {
+            return Err(crate::llm_error::LlmError::ConfigError {
+                message: "No LLM #1 provider configured".to_string(),
+            });
+        };
+
+        // Create temporary processor for second-pass call
+        let processor = dual_llm::UnconscciousLlmProcessor::new(
+            llm1_provider.clone(),
+            self.dual_llm_config.clone(),
+        );
+
+        // Format memories for the prompt (if present)
+        let memories_str = memories.map(|m| m.format_for_llm());
+        let memories_ref = memories_str.as_deref();
+
+        processor
+            .second_pass(user_input, memories_ref, temporal_context)
+            .await
+    }
+
+    /// Retrieve memories based on LLM #1 first-pass guidance (Phase 3B.3)
+    ///
+    /// This is the bridge between first-pass guidance and second-pass recognition.
+    /// Instead of mechanical keyword extraction, we use LLM #1's intelligent assessment
+    /// of what memories would help understand the user's message.
+    pub async fn retrieve_selected_memories(
+        &self,
+        guidance: &dual_llm::MemorySelectionGuidance,
+        session_id: Uuid,
+        user_id: Uuid,
+        user_input: &str,
+    ) -> Result<dual_llm::RetrievedMemories, Box<dyn std::error::Error>> {
+        // If LLM #1 says no memory needed, return empty
+        if !guidance.warm_needed && !guidance.cold_needed {
+            return Ok(dual_llm::RetrievedMemories {
+                warm_context: String::new(),
+                cold_context: String::new(),
+                temporal_context: guidance.temporal_context.clone(),
+                has_content: false,
+            });
+        }
+
+        // If no search terms provided but memory needed, can't search
+        if guidance.search_terms.is_empty() {
+            debug!(
+                warm_needed = guidance.warm_needed,
+                cold_needed = guidance.cold_needed,
+                "LLM #1 requested memory but provided no search terms - returning empty"
+            );
+            return Ok(dual_llm::RetrievedMemories {
+                warm_context: String::new(),
+                cold_context: String::new(),
+                temporal_context: guidance.temporal_context.clone(),
+                has_content: false,
+            });
+        }
+
+        let mut warm_context = String::new();
+        let mut cold_context = String::new();
+
+        // Retrieve warm memory (current session) if needed
+        if guidance.warm_needed {
+            for search_term in &guidance.search_terms {
+                if let Ok(warm_turns) = self
+                    .memory_tier_manager
+                    .search_warm_memory(session_id, search_term, 10)
+                    .await
+                {
+                    if !warm_turns.is_empty() && warm_context.is_empty() {
+                        // Rank by BM25 + temporal decay + identity criticality
+                        let ranked_turns = self
+                            .memory_tier_manager
+                            .rank_turns_by_relevance(warm_turns, user_input)
+                            .await;
+
+                        // Select best turn (highest combined significance)
+                        if let Some((best_turn, significance)) = ranked_turns.first() {
+                            warm_context.push_str("# Earlier in this session:\n");
+                            warm_context.push_str(&format!(
+                                "User: {}\nAssistant: {}\n\n",
+                                best_turn.user_message, best_turn.ai_response
+                            ));
+                            debug!(
+                                memory_tier = "warm",
+                                search_term = %search_term,
+                                combined_score = %significance.combined_score(),
+                                recency = %significance.recency_score,
+                                semantic = %significance.semantic_relevance,
+                                identity = %significance.identity_criticality,
+                                "LLM #1 guided retrieval: warm memory"
+                            );
+                        }
+                        break; // Found best context
+                    }
+                }
+            }
+        }
+
+        // Retrieve cold memory (previous sessions) if needed
+        if guidance.cold_needed {
+            for search_term in &guidance.search_terms {
+                if let Ok(cold_turns) = self
+                    .memory_tier_manager
+                    .search_cold_memory(user_id, search_term, 10)
+                    .await
+                {
+                    if !cold_turns.is_empty() && cold_context.is_empty() {
+                        // Rank by BM25 + temporal decay + identity criticality
+                        let ranked_turns = self
+                            .memory_tier_manager
+                            .rank_turns_by_relevance(cold_turns, user_input)
+                            .await;
+
+                        // Select best turn (highest combined significance)
+                        if let Some((best_turn, significance)) = ranked_turns.first() {
+                            let time_ago = format_time_ago(&best_turn.user_timestamp);
+                            cold_context.push_str("# From previous sessions:\n");
+                            cold_context.push_str(&format!(
+                                "[{}] User: {}\nAssistant: {}\n\n",
+                                time_ago, best_turn.user_message, best_turn.ai_response
+                            ));
+                            debug!(
+                                memory_tier = "cold",
+                                search_term = %search_term,
+                                combined_score = %significance.combined_score(),
+                                recency = %significance.recency_score,
+                                semantic = %significance.semantic_relevance,
+                                identity = %significance.identity_criticality,
+                                time_ago = %time_ago,
+                                "LLM #1 guided retrieval: cold memory"
+                            );
+                        }
+                        break; // Found best context
+                    }
+                }
+            }
+        }
+
+        let has_content = !warm_context.is_empty() || !cold_context.is_empty();
+
+        Ok(dual_llm::RetrievedMemories {
+            warm_context,
+            cold_context,
+            temporal_context: guidance.temporal_context.clone(),
+            has_content,
+        })
+    }
+
     pub async fn new(
         provider: Box<dyn LlmProvider>,
         mut framework_state: FrameworkState,
@@ -1949,5 +2116,382 @@ mod tests {
             .expect("Failed to get relationship");
 
         assert_eq!(reloaded.interaction_count, 10);
+    }
+
+    // Phase 3B.3: retrieve_selected_memories tests
+
+    #[tokio::test]
+    async fn test_retrieve_selected_memories_no_memory_needed() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user for FK constraint
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Guidance says no memory needed
+        let guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: false,
+            cold_needed: false,
+            search_terms: vec![],
+            temporal_context: "Fresh conversation".to_string(),
+            reasoning: "No memory retrieval required".to_string(),
+        };
+
+        let result = api
+            .retrieve_selected_memories(&guidance, session_id, user_id, "Hello")
+            .await
+            .unwrap();
+
+        assert!(!result.has_content);
+        assert!(result.warm_context.is_empty());
+        assert!(result.cold_context.is_empty());
+        assert_eq!(result.temporal_context, "Fresh conversation");
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_selected_memories_empty_search_terms() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user for FK constraint
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Guidance says memory needed but no search terms (edge case)
+        let guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: true,
+            cold_needed: true,
+            search_terms: vec![], // No terms to search with
+            temporal_context: "Continuing conversation".to_string(),
+            reasoning: "Should retrieve but can't".to_string(),
+        };
+
+        let result = api
+            .retrieve_selected_memories(&guidance, session_id, user_id, "Hello")
+            .await
+            .unwrap();
+
+        // Should return empty since no search terms provided
+        assert!(!result.has_content);
+        assert!(result.warm_context.is_empty());
+        assert!(result.cold_context.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_selected_memories_warm_with_data() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user for FK constraint
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Store a turn in warm memory
+        api.memory_tier_manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "What is quantum computing?",
+                "Quantum computing uses qubits for parallel processing.",
+                None, // snapshot_id
+                10,   // input_tokens
+                20,   // output_tokens
+            )
+            .await
+            .unwrap();
+
+        // Wait a moment for storage
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Guidance requests warm memory with relevant search term
+        let guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: true,
+            cold_needed: false,
+            search_terms: vec!["quantum".to_string()],
+            temporal_context: "Continuing discussion".to_string(),
+            reasoning: "User mentioned quantum earlier".to_string(),
+        };
+
+        let result = api
+            .retrieve_selected_memories(&guidance, session_id, user_id, "Tell me more about qubits")
+            .await
+            .unwrap();
+
+        assert!(result.has_content);
+        assert!(result.warm_context.contains("quantum"));
+        assert!(result.warm_context.contains("Earlier in this session"));
+        assert!(result.cold_context.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_selected_memories_no_match() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user for FK constraint
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Store unrelated turn
+        api.memory_tier_manager
+            .save_conversation_turn(session_id, user_id, "Hello", "Hi there!", None, 5, 5)
+            .await
+            .unwrap();
+
+        // Guidance requests memory but search terms don't match
+        let guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: true,
+            cold_needed: false,
+            search_terms: vec!["nonexistent_term_xyz".to_string()],
+            temporal_context: "Looking for context".to_string(),
+            reasoning: "Searching for something not there".to_string(),
+        };
+
+        let result = api
+            .retrieve_selected_memories(&guidance, session_id, user_id, "Unrelated query")
+            .await
+            .unwrap();
+
+        // Should return empty since no matching content
+        assert!(!result.has_content);
+        assert!(result.warm_context.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_retrieve_selected_memories_temporal_context_passed_through() {
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user for FK constraint
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Guidance with specific temporal context
+        let guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: false,
+            cold_needed: false,
+            search_terms: vec![],
+            temporal_context: "Resuming after 3 days".to_string(),
+            reasoning: "No specific memories needed".to_string(),
+        };
+
+        let result = api
+            .retrieve_selected_memories(&guidance, session_id, user_id, "Hello again")
+            .await
+            .unwrap();
+
+        // Temporal context should be passed through even with no content
+        assert_eq!(result.temporal_context, "Resuming after 3 days");
+    }
+
+    // Phase 3B.3: Two-pass integration test
+
+    #[tokio::test]
+    async fn test_two_pass_flow_integration() {
+        // This test verifies the complete two-pass flow:
+        // 1. first_pass() → MemorySelectionGuidance
+        // 2. retrieve_selected_memories() → RetrievedMemories
+        // 3. second_pass() → Llm1Output (if dual-LLM enabled)
+
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool.clone()).await;
+
+        // Create user
+        let user_id = Uuid::new_v4();
+        sqlx::query(
+            "INSERT INTO users (id, provider, provider_id, email, name, created_at, last_login)
+             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))",
+        )
+        .bind(user_id.as_bytes().to_vec())
+        .bind("test")
+        .bind(user_id.to_string())
+        .bind("test@example.com")
+        .bind("Test User")
+        .execute(&db_pool)
+        .await
+        .unwrap();
+
+        let session_id = api
+            .memory_tier_manager
+            .get_or_create_session(user_id)
+            .await
+            .unwrap();
+
+        // Store some conversation history
+        api.memory_tier_manager
+            .save_conversation_turn(
+                session_id,
+                user_id,
+                "What is machine learning?",
+                "Machine learning is a subset of AI that enables systems to learn from data.",
+                None,
+                15,
+                30,
+            )
+            .await
+            .unwrap();
+
+        // Wait for storage
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+
+        // Step 1: First pass (test with disabled dual-LLM, which uses fallback)
+        // Note: In production with real LLM, this would return intelligent guidance
+        let guidance = api
+            .first_pass("Tell me more about neural networks", None, None)
+            .await
+            .unwrap();
+
+        // In disabled mode, first_pass returns default "no memory needed"
+        // This is expected since build_test_vif_api creates VifApi with dual_llm disabled
+        assert!(
+            !guidance.warm_needed || !guidance.cold_needed || guidance.search_terms.is_empty(),
+            "Default guidance should indicate no memory retrieval needed"
+        );
+
+        // Step 2: Simulate guidance that WOULD request memory (as if LLM was enabled)
+        let simulated_guidance = dual_llm::MemorySelectionGuidance {
+            warm_needed: true,
+            cold_needed: false,
+            search_terms: vec!["machine".to_string(), "learning".to_string()],
+            temporal_context: "Continuing ML discussion".to_string(),
+            reasoning: "User wants to explore ML topic further".to_string(),
+        };
+
+        let memories = api
+            .retrieve_selected_memories(
+                &simulated_guidance,
+                session_id,
+                user_id,
+                "Tell me about neural networks",
+            )
+            .await
+            .unwrap();
+
+        // Should retrieve the stored conversation about ML
+        assert!(memories.has_content, "Should find ML-related memory");
+        assert!(
+            memories.warm_context.contains("machine learning")
+                || memories.warm_context.contains("Machine learning"),
+            "Warm context should contain ML content"
+        );
+        assert_eq!(memories.temporal_context, "Continuing ML discussion");
+
+        // Step 3: Second pass would use these memories
+        // In production: api.second_pass("Tell me about neural networks", Some(&memories), Some(&temporal_context))
+        // But since dual-LLM is disabled in test, we verify the memories are correctly formatted
+        let formatted = memories.format_for_llm();
+        assert!(
+            formatted.contains("Earlier in this session"),
+            "Formatted memories should have session header"
+        );
+        assert!(
+            formatted.contains("machine learning") || formatted.contains("Machine learning"),
+            "Formatted memories should contain ML content"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_second_pass_disabled_without_llm1_provider() {
+        // Test that second_pass returns appropriate error when dual-LLM is disabled
+        let db_pool = setup_test_db().await.unwrap();
+        let api = build_test_vif_api(db_pool).await;
+
+        // build_test_vif_api creates VifApi with dual_llm disabled
+        let result = api.second_pass("Test input", None, None).await;
+
+        assert!(result.is_err(), "Should fail when dual-LLM disabled");
+        match result {
+            Err(llm_error::LlmError::FeatureDisabled { feature }) => {
+                assert_eq!(feature, "dual_llm");
+            }
+            Err(other) => panic!("Expected FeatureDisabled, got: {:?}", other),
+            Ok(_) => panic!("Expected error, got Ok"),
+        }
     }
 }

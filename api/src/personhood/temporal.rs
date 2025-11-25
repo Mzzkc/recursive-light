@@ -311,4 +311,169 @@ mod tests {
         assert_eq!(context.resumption_type, ResumptionType::FreshStart);
         assert_eq!(context.context_intention, ContextIntention::NewThread);
     }
+
+    #[test]
+    fn test_time_gap_describe_all_variants() {
+        assert_eq!(TimeGap::Seamless.describe(), "continuing our conversation");
+        assert_eq!(TimeGap::RecentPause.describe(), "a few minutes ago");
+        assert_eq!(TimeGap::SameDay.describe(), "earlier today");
+        assert_eq!(TimeGap::NextDay.describe(), "yesterday");
+        assert_eq!(TimeGap::DaysLater.describe(), "a few days ago");
+        assert_eq!(TimeGap::WeeksLater.describe(), "a few weeks ago");
+        assert_eq!(TimeGap::LongGap.describe(), "quite a while ago");
+        assert_eq!(TimeGap::FirstContact.describe(), "for the first time");
+    }
+
+    #[test]
+    fn test_time_gap_should_acknowledge() {
+        // Should NOT acknowledge
+        assert!(!TimeGap::Seamless.should_acknowledge());
+        assert!(!TimeGap::RecentPause.should_acknowledge());
+        assert!(!TimeGap::SameDay.should_acknowledge());
+        assert!(!TimeGap::FirstContact.should_acknowledge());
+
+        // Should acknowledge
+        assert!(TimeGap::NextDay.should_acknowledge());
+        assert!(TimeGap::DaysLater.should_acknowledge());
+        assert!(TimeGap::WeeksLater.should_acknowledge());
+        assert!(TimeGap::LongGap.should_acknowledge());
+    }
+
+    #[test]
+    fn test_time_gap_classification_boundaries() {
+        // SameDay: 60-360 minutes
+        assert_eq!(
+            TimeGap::from_duration(Duration::minutes(61)),
+            TimeGap::SameDay
+        );
+        assert_eq!(
+            TimeGap::from_duration(Duration::minutes(300)),
+            TimeGap::SameDay
+        );
+
+        // WeeksLater: 7-30 days
+        assert_eq!(
+            TimeGap::from_duration(Duration::days(8)),
+            TimeGap::WeeksLater
+        );
+        assert_eq!(
+            TimeGap::from_duration(Duration::days(25)),
+            TimeGap::WeeksLater
+        );
+
+        // LongGap: 30+ days
+        assert_eq!(TimeGap::from_duration(Duration::days(31)), TimeGap::LongGap);
+        assert_eq!(
+            TimeGap::from_duration(Duration::days(100)),
+            TimeGap::LongGap
+        );
+    }
+
+    #[test]
+    fn test_temporal_context_first_contact() {
+        let context = TemporalContext::new(None, "Hello, nice to meet you!");
+
+        assert_eq!(context.time_gap, TimeGap::FirstContact);
+        assert!(context.last_interaction.is_none());
+    }
+
+    #[test]
+    fn test_context_intention_continue_patterns() {
+        // "continuing" keyword
+        assert_eq!(
+            ContextIntention::infer_from_message("continuing from where we left off"),
+            ContextIntention::ContinueTopic
+        );
+
+        // "as we discussed" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("As we discussed before"),
+            ContextIntention::ContinueTopic
+        );
+
+        // "going back to" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("Going back to what you said"),
+            ContextIntention::ContinueTopic
+        );
+
+        // "you said" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("You said something interesting"),
+            ContextIntention::ContinueTopic
+        );
+    }
+
+    #[test]
+    fn test_context_intention_new_thread_patterns() {
+        // "new topic" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("Let's start a new topic"),
+            ContextIntention::NewThread
+        );
+
+        // "different question" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("Different question for you"),
+            ContextIntention::NewThread
+        );
+
+        // "something else" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("Something else entirely: how do I cook pasta?"),
+            ContextIntention::NewThread
+        );
+
+        // "unrelated" keyword
+        assert_eq!(
+            ContextIntention::infer_from_message("Unrelated question: what's the weather?"),
+            ContextIntention::NewThread
+        );
+
+        // "by the way" pattern
+        assert_eq!(
+            ContextIntention::infer_from_message("By the way, how do you handle errors?"),
+            ContextIntention::NewThread
+        );
+    }
+
+    #[test]
+    fn test_temporal_framing_content() {
+        // Seamless should have "seamlessly" in framing
+        let last = Utc::now() - Duration::minutes(2);
+        let context = TemporalContext::new(Some(last), "test");
+        assert!(context.temporal_framing.contains("seamlessly"));
+
+        // Fresh start requires a time gap + new topic signal
+        // With Seamless gap, new topic still results in seamless (by design)
+        // Use a longer gap to trigger FreshStart
+        let last_hours = Utc::now() - Duration::hours(2);
+        let context2 = TemporalContext::new(Some(last_hours), "new topic: something");
+        assert!(
+            context2.temporal_framing.contains("fresh"),
+            "Expected 'fresh' in framing, got: {}",
+            context2.temporal_framing
+        );
+
+        // Acknowledging gap should have "Resuming" in framing
+        let last_days = Utc::now() - Duration::days(5);
+        let context3 =
+            TemporalContext::new(Some(last_days), "going back to what we were discussing");
+        assert!(
+            context3.temporal_framing.contains("Resuming"),
+            "Expected 'Resuming' in framing, got: {}",
+            context3.temporal_framing
+        );
+    }
+
+    #[test]
+    fn test_resumption_same_day_continue_is_seamless() {
+        // Same day + continue topic = seamless (not acknowledging gap)
+        let last = Utc::now() - Duration::hours(3);
+        let context = TemporalContext::new(Some(last), "Continuing our earlier discussion");
+
+        assert_eq!(context.time_gap, TimeGap::SameDay);
+        assert_eq!(context.context_intention, ContextIntention::ContinueTopic);
+        assert_eq!(context.resumption_type, ResumptionType::Seamless);
+    }
 }

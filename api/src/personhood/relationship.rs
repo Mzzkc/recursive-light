@@ -265,4 +265,154 @@ mod tests {
         rel.adjust_communication_style(Some(0.5), None, None, None);
         assert_eq!(rel.communication_style.technical_depth, 1.0);
     }
+
+    #[test]
+    fn test_record_interaction() {
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+        let original_count = rel.interaction_count;
+        let original_time = rel.last_interaction;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        rel.record_interaction();
+
+        assert_eq!(rel.interaction_count, original_count + 1);
+        assert!(rel.last_interaction > original_time);
+    }
+
+    #[test]
+    fn test_add_relationship_anchor() {
+        use crate::dual_llm::types::IdentityAnchor;
+
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+
+        let anchor = IdentityAnchor {
+            anchor_type: "shared_interest".to_string(),
+            description: "We both enjoy exploring algorithms".to_string(),
+            confidence: 0.75,
+            first_observed: "session_1".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["CD".to_string()],
+        };
+
+        rel.add_relationship_anchor(anchor.clone());
+        assert_eq!(rel.relationship_anchors.len(), 1);
+
+        // Adding similar anchor should reinforce, not duplicate
+        rel.add_relationship_anchor(anchor);
+        assert_eq!(rel.relationship_anchors.len(), 1);
+        assert_eq!(rel.relationship_anchors[0].reinforcement_count, 2);
+    }
+
+    #[test]
+    fn test_add_different_relationship_anchors() {
+        use crate::dual_llm::types::IdentityAnchor;
+
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+
+        rel.add_relationship_anchor(IdentityAnchor {
+            anchor_type: "shared_interest".to_string(),
+            description: "Algorithms".to_string(),
+            confidence: 0.7,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["CD".to_string()],
+        });
+
+        rel.add_relationship_anchor(IdentityAnchor {
+            anchor_type: "communication_style".to_string(),
+            description: "Prefers detailed explanations".to_string(),
+            confidence: 0.8,
+            first_observed: "now".to_string(),
+            reinforcement_count: 1,
+            domains: vec!["SD".to_string()],
+        });
+
+        assert_eq!(rel.relationship_anchors.len(), 2);
+    }
+
+    #[test]
+    fn test_set_conversation_state() {
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+        assert_eq!(rel.conversation_state, ConversationState::Open);
+
+        rel.set_conversation_state(ConversationState::OngoingTopic {
+            topic: "Quantum mechanics".to_string(),
+            started: Utc::now(),
+        });
+        match &rel.conversation_state {
+            ConversationState::OngoingTopic { topic, .. } => {
+                assert_eq!(topic, "Quantum mechanics");
+            }
+            _ => panic!("Expected OngoingTopic state"),
+        }
+
+        rel.set_conversation_state(ConversationState::DeepDive {
+            subject: "Algorithms".to_string(),
+            depth_level: 3,
+        });
+        match &rel.conversation_state {
+            ConversationState::DeepDive {
+                subject,
+                depth_level,
+            } => {
+                assert_eq!(subject, "Algorithms");
+                assert_eq!(*depth_level, 3);
+            }
+            _ => panic!("Expected DeepDive state"),
+        }
+    }
+
+    #[test]
+    fn test_communication_style_clamps_at_zero() {
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+
+        // Start at 0.5
+        assert_eq!(rel.communication_style.formality, 0.5);
+
+        // Try to go negative
+        rel.adjust_communication_style(None, Some(-0.8), None, None);
+        assert_eq!(rel.communication_style.formality, 0.0);
+    }
+
+    #[test]
+    fn test_communication_style_multiple_adjustments() {
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+
+        rel.adjust_communication_style(
+            Some(0.1),  // technical +0.1 -> 0.6
+            Some(-0.2), // formality -0.2 -> 0.3
+            Some(0.3),  // verbosity +0.3 -> 0.8
+            Some(0.0),  // example_use unchanged -> 0.5
+        );
+
+        assert!((rel.communication_style.technical_depth - 0.6).abs() < 0.01);
+        assert!((rel.communication_style.formality - 0.3).abs() < 0.01);
+        assert!((rel.communication_style.verbosity - 0.8).abs() < 0.01);
+        assert!((rel.communication_style.example_use - 0.5).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_preference_confidence_averaging() {
+        let mut rel = RelationshipMemory::new(Uuid::new_v4(), Uuid::new_v4());
+
+        rel.add_preference("Technical details".to_string(), 0.6);
+        rel.add_preference("Technical details".to_string(), 0.8);
+
+        // Confidence should be averaged: (0.6 + 0.8) / 2 = 0.7
+        assert!(
+            (rel.user_preferences[0].confidence - 0.7).abs() < 0.01,
+            "Confidence should be averaged"
+        );
+    }
+
+    #[test]
+    fn test_communication_style_defaults() {
+        let style = CommunicationStyle::default();
+
+        assert!((style.technical_depth - 0.5).abs() < 0.01);
+        assert!((style.formality - 0.5).abs() < 0.01);
+        assert!((style.verbosity - 0.5).abs() < 0.01);
+        assert!((style.example_use - 0.5).abs() < 0.01);
+        assert!(style.domain_preferences.is_empty());
+    }
 }

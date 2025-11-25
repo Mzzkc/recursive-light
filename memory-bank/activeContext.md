@@ -3,8 +3,8 @@
 activeContext=RecursiveLightAPI, recognitionInterfaces∈BDE
 
 ## State
-P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅+PersonManager-integration✅,178t), DirectoryCleanup:✅(Nov4-handoffs-archived,doc-drift-eliminated,178t)
-PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, PersonManager-VifApi-integrated✅, SQLite-compat✅, clean-documentation✅ | 178/178t(100%),0warn,75%+cov,READY-FOR-P3B.3
+P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅+PersonManager-integration✅,178t), DirectoryCleanup:✅(Nov4-handoffs-archived), P3B.3-TwoPass:⏳(first-pass✅+retrieval✅+second-pass✅,244t,process_input-refactor-pending)
+PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, PersonManager-VifApi-integrated✅, SQLite-compat✅, two-pass-infra✅ | 244/244t(100%),0warn,63%cov,P3B.3-IN-PROGRESS
 
 ## Focus
 **P3B/3-Integration(UNBLOCKED):** Person-centric-flow(LLM1-every-turn,two-pass-mem-selection), CAM+Personhood-integration(insight-extraction→CAM-storage), volumetric-configs(3-5domains-simultaneous) | Blocker:ELIMINATED(2025-11-20)
@@ -14,6 +14,16 @@ PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), 
 **P3-CAM(Parallel):** Integration-tests(hybrid-ops), LLM1-insight-extraction(Stage6-BDE→CAM), conscious-signals([REMEMBER:]), semantic-associations(Qdrant-HNSW)
 
 ## Recent
+### Phase-3B.3:Second-Pass+Coverage(2025-11-25,~2h,TDF-embodied)
+✅PARTIAL: Two-pass-infrastructure-complete, coverage-expanded, 178→244tests(+42), 58%→63%cov(+4.4%)
+Implementation: 1)RetrievedMemories-struct(types.rs,bridge-type), 2)retrieve_selected_memories(lib.rs,LLM1-guided-retrieval), 3)build_llm1_second_pass_prompt(processors.rs,memory+temporal-context), 4)second_pass(processors.rs+lib.rs,full-recognition-with-context), 5)FeatureDisabled-LlmError-variant
+Coverage-Expanded: person.rs(54%→100%), relationship.rs(47%→100%), types.rs(45%→82%), temporal.rs(77%→97%), llm_error.rs(37%→58%)
+Two-Pass-Flow: first_pass()→MemorySelectionGuidance→retrieve_selected_memories()→RetrievedMemories→second_pass()→Llm1Output
+Results: 244/244t✅, 0warn✅, 63%cov✅, two-pass-infra✅
+Remaining: process_input()-refactor(wire-two-pass-flow), e2e-real-LLM-testing, perf-validation(<500ms-P95)
+Next: Refactor-process_input()-to-use-two-pass-flow
+Files: types.rs,mod.rs,processors.rs,lib.rs,llm_error.rs,person.rs,relationship.rs,temporal.rs,STATUS.md,PHASE-3B-3-INTEGRATION-PLAN.md
+
 ### DirectoryCleanup:Multi-Agent-Coordination(2025-11-25,~2h,TDF-aligned)
 ✅COMPLETE: 5specialist-coordination(3805L-analysis)+integration-synthesis→Phase1-critical-cleanup-executed, 70-80%-reduction-agent-startup-confusion, 0data-loss
 Context: AI-agent-confusion-from-stale-Nov4-handoffs(21d-old)→contradicted-Nov24-reality(P3B.2-complete,178t), user-recognized:"doubled-work-old-docs"
@@ -131,7 +141,7 @@ Doc: 4files(testing-philosophy.md,framework-concepts.md,etc)
 +2t(82total): quality-persistence(save/load), quality-evolution(cross-session)
 
 ## TechnicalStatus
-Tests: 146/146(100%), 75%+cov(prod-quality), clippy-clean,0warn,0dead, prehook✅
+Tests: 244/244(100%), 63%cov(expanding), clippy-clean,0warn,0dead, prehook✅
 Arch: 7stage-BDE✅, quality(calc+track+persist)✅, 3tier-mem(hot:3-5turns/1500tok, warm:50turns/15000tok/OFFSET5, cold:unlimited/100turn-queries)✅, perf<1ms✅
 
 ```
@@ -183,10 +193,10 @@ MemBank: activeContext.md=current(THIS), STATUS.md=overall, update-after-signifi
 TDF: ref-domains-decisions, productive-tension-boundaries, quality∈constraint, recognition∈interfaces
 
 ## QuickPickup(NextSession)
-Read: 1)THIS, 2)STATUS.md, 3)**PHASE-3B-3-INTEGRATION-PLAN.md**(PRIORITY), 4)phase3b-2-personmanager-integration-2025-11-24.md(recent-session)
-Do: Execute-Phase-3B.3(two-pass-LLM1,12-16h,CRITICAL-PATH)→then-3B.4+3B.5(parallel)→then-CAM-integration
-Context: where=P3B.2-COMPLETE(PersonManager-integrated), works=178/178t+0warn+75%cov, blockers=NONE, plan=PHASE-3B-3-INTEGRATION-PLAN.md
-Architecture: Personhood(LLMPerson+TemporalContext+RelationshipMemory+PersonManager-VifApi-integrated)+Volumetric(N-domain)+CAM(Qdrant+PostgreSQL+OpenAI)+SQLite-compat
+Read: 1)THIS, 2)STATUS.md, 3)PHASE-3B-3-INTEGRATION-PLAN.md, 4)phase3b-3-second-pass-session-2025-11-25.md(latest-session)
+Do: **Refactor-process_input()-to-use-two-pass-flow**(PRIMARY), then-e2e-real-LLM-testing, then-perf-validation
+Context: where=P3B.3-IN-PROGRESS(two-pass-infra-complete,process_input-refactor-pending), works=244/244t+0warn+63%cov, blockers=NONE
+Architecture: Two-pass-flow(first_pass→retrieve_selected_memories→second_pass)✅, Personhood✅, CAM-foundation✅, SQLite-compat✅
 
-SessionStartup: read(PHASE-3B-3-INTEGRATION-PLAN.md)→start-Phase-3B.3(two-pass-LLM1-memory-selection)
-*✅P3B.2-COMPLETE(2025-11-24). PersonManager-integrated. Ready-for-Phase-3B.3(person-centric-flow).*
+SessionStartup: read(STATUS.md-P3B.3-section)→continue-process_input-refactor(wire-two-pass-into-main-flow)
+*⏳P3B.3-IN-PROGRESS(2025-11-25). Two-pass-infra-complete. Next=wire-into-process_input().*

@@ -47,6 +47,9 @@ pub enum LlmError {
 
     /// Authentication/authorization errors
     AuthError { message: String },
+
+    /// Feature is disabled (e.g., dual-LLM mode not enabled)
+    FeatureDisabled { feature: String },
 }
 
 impl fmt::Display for LlmError {
@@ -104,6 +107,9 @@ impl fmt::Display for LlmError {
             }
             LlmError::AuthError { message } => {
                 write!(f, "Authentication error: {}", message)
+            }
+            LlmError::FeatureDisabled { feature } => {
+                write!(f, "Feature disabled: {}", feature)
             }
         }
     }
@@ -246,5 +252,60 @@ mod tests {
         assert!(display.contains("Rate limit error"));
         assert!(display.contains("Too many requests"));
         assert!(display.contains("60"));
+    }
+
+    #[test]
+    fn test_feature_disabled_error() {
+        let err = LlmError::FeatureDisabled {
+            feature: "dual_llm".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Feature disabled"));
+        assert!(display.contains("dual_llm"));
+    }
+
+    #[test]
+    fn test_config_error() {
+        let err = LlmError::ConfigError {
+            message: "Missing API key".to_string(),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Configuration error"));
+        assert!(display.contains("Missing API key"));
+    }
+
+    #[test]
+    fn test_api_error_with_status() {
+        let err = LlmError::ApiError {
+            message: "Bad request".to_string(),
+            error_type: Some("invalid_request".to_string()),
+            status_code: Some(400),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("API error"));
+        assert!(display.contains("Bad request"));
+        assert!(display.contains("400"));
+    }
+
+    #[test]
+    fn test_json_parse_error() {
+        let err = LlmError::JsonParseError {
+            message: "Unexpected token".to_string(),
+            raw_response: Some("{invalid}".to_string()),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("JSON parse error"));
+        assert!(display.contains("Unexpected token"));
+    }
+
+    #[test]
+    fn test_network_error_with_status() {
+        let err = LlmError::NetworkError {
+            message: "Connection refused".to_string(),
+            status_code: Some(503),
+        };
+        let display = format!("{}", err);
+        assert!(display.contains("Network error"));
+        assert!(display.contains("503"));
     }
 }

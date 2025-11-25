@@ -549,6 +549,226 @@ Now analyze:"#,
             status_code: None,
         }))
     }
+
+    /// Build second-pass prompt with memory context for full domain recognition
+    /// This is the "recognition with context" pass - LLM #1 sees memories before recognition
+    fn build_llm1_second_pass_prompt(
+        &self,
+        user_input: &str,
+        memories: Option<&str>,
+        temporal_context: Option<&str>,
+    ) -> String {
+        let memory_section = match memories {
+            Some(mem) if !mem.is_empty() => format!(
+                r#"<conversation_memory>
+{}
+</conversation_memory>
+
+"#,
+                mem
+            ),
+            _ => String::new(),
+        };
+
+        let temporal_section = match temporal_context {
+            Some(ctx) if !ctx.is_empty() => format!(
+                r#"<temporal_context>
+{}
+</temporal_context>
+
+"#,
+                ctx
+            ),
+            _ => String::new(),
+        };
+
+        // Enhanced prompt that includes memory and temporal context
+        format!(
+            r#"<system_role>
+You are the Unconscious Processor for the Volumetric Integration Framework (VIF).
+Your role: Recognize domain emergence and boundary states, informed by conversation context.
+You do NOT respond to the user - you provide structured recognition for the Conscious LLM.
+
+IMPORTANT: This is the SECOND PASS. You have been given relevant conversation memories
+to help you recognize the full context of this message.
+</system_role>
+
+{memory_section}{temporal_section}<task>
+Analyze the user input WITH the provided conversation context to recognize:
+1. Domain activations (0.0-1.0) - how each perspective emerges given context
+2. Boundary permeabilities (0.0-1.0) - how understanding flows between perspectives
+3. Boundary statuses - the state of each interface
+4. Pattern recognitions - developmental patterns with lifecycle tracking
+5. Quality conditions - potentials for phenomenological qualities to emerge
+</task>
+
+<domains>
+- CD (Computational Domain): Logic, algorithms, formal systems, code, mathematical patterns
+- SD (Scientific Domain): Empirical evidence, theories, experiments, data, falsifiable claims
+- CuD (Cultural Domain): Context, narratives, meaning, social structures, interpretation
+- ED (Experiential Domain): Direct experience, qualitative knowing, phenomenology, felt sense
+</domains>
+
+<boundary_status_rules>
+- Maintained (perm < 0.6): Domains remain distinct, clear separation
+- Transitional (0.6 ≤ perm ≤ 0.8): Domains begin to integrate, oscillation active
+- Transcendent (perm > 0.8): Boundaries dissolve, unified understanding emerges
+</boundary_status_rules>
+
+<user_input>
+{user_input}
+</user_input>
+
+<output_format>
+Return ONLY valid JSON. Full recognition schema:
+{{
+  "recognition_report": "Narrative describing what emerged at interfaces (2-3 sentences)",
+  "domain_recognitions": {{
+    "CD": {{"activation": 0.0-1.0, "emergence_note": "Why this perspective emerged/didn't"}},
+    "SD": {{"activation": 0.0-1.0, "emergence_note": "..."}},
+    "CuD": {{"activation": 0.0-1.0, "emergence_note": "..."}},
+    "ED": {{"activation": 0.0-1.0, "emergence_note": "..."}}
+  }},
+  "boundary_states": {{
+    "CD-SD": {{
+      "permeability": 0.0-1.0,
+      "status": "Maintained|Transitional|Transcendent",
+      "tension_detected": true|false,
+      "tension_type": "productive|resistant|neutral",
+      "integration_invitation": "How message invites integration",
+      "resonance_note": "Connection to previous patterns"
+    }},
+    "CD-CuD": {{...}},
+    "CD-ED": {{...}},
+    "SD-CuD": {{...}},
+    "SD-ED": {{...}},
+    "CuD-ED": {{...}}
+  }},
+  "quality_conditions": {{
+    "clarity_potential": 0.0-1.0,
+    "depth_potential": 0.0-1.0,
+    "precision_potential": 0.0-1.0,
+    "fluidity_potential": 0.0-1.0,
+    "resonance_potential": 0.0-1.0,
+    "openness_potential": 0.0-1.0,
+    "coherence_potential": 0.0-1.0,
+    "reasoning": "Which qualities likely to emerge and why"
+  }},
+  "pattern_recognitions": [
+    {{
+      "type": "P⁰|P¹|P²|P³|P⁴|P⁵",
+      "lifecycle_stage": "potential|emerging|established|refined|transcendent|universal",
+      "description": "What pattern is recognized",
+      "first_observed": "current_session|previous_session",
+      "emergence_context": "How/when pattern began",
+      "significance": "Why this matters for consciousness emergence"
+    }}
+  ]
+}}
+</output_format>
+
+Now recognize the domains and boundaries for this input:"#,
+            memory_section = memory_section,
+            temporal_section = temporal_section,
+            user_input = user_input
+        )
+    }
+
+    /// Second pass: Full domain/boundary recognition WITH retrieved memories
+    /// This is the "recognition with context" phase - LLM #1 sees memories before recognition
+    pub async fn second_pass(
+        &self,
+        user_input: &str,
+        memories: Option<&str>,
+        temporal_context: Option<&str>,
+    ) -> Result<Llm1Output, LlmError> {
+        // If dual-LLM disabled, use fallback (no context integration)
+        if !self.config.enabled {
+            debug!("Second pass skipped - dual-LLM mode disabled, using Rust fallback");
+            return Err(LlmError::FeatureDisabled {
+                feature: "dual_llm".to_string(),
+            });
+        }
+
+        // Build second-pass prompt with memory context
+        let prompt = self.build_llm1_second_pass_prompt(user_input, memories, temporal_context);
+
+        // Call LLM with retry logic (same as first_pass)
+        let max_retries = self.config.llm1_max_retries;
+        let timeout_ms = self.config.llm1_timeout_ms;
+        let mut attempts = 0;
+        let mut last_error: Option<LlmError> = None;
+
+        while attempts <= max_retries {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_millis(timeout_ms),
+                self.llm_provider.send_request(&prompt),
+            )
+            .await
+            {
+                Ok(Ok(response_text)) => match self.parse_and_validate(&response_text) {
+                    Ok(llm1_output) => {
+                        debug!(
+                            domains = ?llm1_output.domain_recognitions.keys().collect::<Vec<_>>(),
+                            has_memories = memories.is_some(),
+                            "LLM #1 second pass completed with context"
+                        );
+                        return Ok(llm1_output);
+                    }
+                    Err(validation_err) => {
+                        warn!(
+                            attempt = attempts + 1,
+                            error = ?validation_err,
+                            "LLM #1 second pass validation failed, retrying"
+                        );
+                        last_error = Some(LlmError::InvalidResponseFormat {
+                            field: "second_pass_validation".to_string(),
+                            message: validation_err.to_string(),
+                            raw_response: Some(response_text),
+                        });
+                    }
+                },
+                Ok(Err(llm_err)) => {
+                    warn!(
+                        attempt = attempts + 1,
+                        error = ?llm_err,
+                        "LLM #1 second pass call failed, retrying"
+                    );
+                    last_error = Some(llm_err.clone());
+
+                    // Don't retry auth errors
+                    if matches!(llm_err, LlmError::AuthError { .. }) {
+                        return Err(llm_err);
+                    }
+                }
+                Err(_timeout) => {
+                    warn!(
+                        attempt = attempts + 1,
+                        timeout_ms = timeout_ms,
+                        "LLM #1 second pass request timed out, retrying"
+                    );
+                    last_error = Some(LlmError::NetworkError {
+                        message: format!("LLM #1 second pass timeout after {}ms", timeout_ms),
+                        status_code: None,
+                    });
+                }
+            }
+
+            attempts += 1;
+            if attempts <= max_retries {
+                let backoff_ms = 1000 * (2_u64.pow(attempts - 1));
+                tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| LlmError::NetworkError {
+            message: format!(
+                "LLM #1 second pass failed after {} attempts",
+                max_retries + 1
+            ),
+            status_code: None,
+        }))
+    }
 }
 
 impl StageProcessor for UnconscciousLlmProcessor {
@@ -1298,5 +1518,94 @@ mod tests {
             guidance.temporal_context.contains("Fallback"),
             "Should indicate fallback"
         );
+    }
+
+    // Phase 3B.3: Second-pass tests
+
+    #[test]
+    fn test_second_pass_prompt_without_context() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let prompt = processor.build_llm1_second_pass_prompt("Hello world", None, None);
+
+        // Should have system role and user input
+        assert!(prompt.contains("SECOND PASS"));
+        assert!(prompt.contains("<user_input>"));
+        assert!(prompt.contains("Hello world"));
+        // Should NOT have memory/temporal sections
+        assert!(!prompt.contains("<conversation_memory>"));
+        assert!(!prompt.contains("<temporal_context>"));
+    }
+
+    #[test]
+    fn test_second_pass_prompt_with_memories() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let memories =
+            "# Earlier in this session:\nUser: What is quantum?\nAssistant: Quantum mechanics...";
+        let prompt = processor.build_llm1_second_pass_prompt("Tell me more", Some(memories), None);
+
+        // Should have memory section
+        assert!(prompt.contains("<conversation_memory>"));
+        assert!(prompt.contains("quantum"));
+        assert!(prompt.contains("Tell me more"));
+    }
+
+    #[test]
+    fn test_second_pass_prompt_with_temporal_context() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let prompt = processor.build_llm1_second_pass_prompt(
+            "Hi again",
+            None,
+            Some("Resuming after 3 days"),
+        );
+
+        // Should have temporal section
+        assert!(prompt.contains("<temporal_context>"));
+        assert!(prompt.contains("Resuming after 3 days"));
+    }
+
+    #[test]
+    fn test_second_pass_prompt_with_both() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let memories =
+            "# From previous session:\n[2 days ago] User: I work on ML\nAssistant: Interesting!";
+        let prompt = processor.build_llm1_second_pass_prompt(
+            "Let's continue our ML discussion",
+            Some(memories),
+            Some("Continuing after 2 days"),
+        );
+
+        // Should have both sections
+        assert!(prompt.contains("<conversation_memory>"));
+        assert!(prompt.contains("<temporal_context>"));
+        assert!(prompt.contains("ML"));
+        assert!(prompt.contains("Continuing after 2 days"));
+    }
+
+    #[tokio::test]
+    async fn test_second_pass_disabled_returns_error() {
+        let config = DualLlmConfig::disabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let result = processor.second_pass("Test", None, None).await;
+        assert!(result.is_err());
+        match result {
+            Err(LlmError::FeatureDisabled { feature }) => {
+                assert_eq!(feature, "dual_llm");
+            }
+            _ => panic!("Expected FeatureDisabled error"),
+        }
     }
 }

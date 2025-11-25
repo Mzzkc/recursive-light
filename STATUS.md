@@ -1,6 +1,6 @@
 # Recursive Light Framework - Project Status Report
-*Last Verified: 2025-11-24T18:00:00-08:00*
-*Phase 3B.2 PersonManager Integration: ✅ COMPLETE - All 178 tests passing*
+*Last Verified: 2025-11-25*
+*Phase 3B.3 Two-Pass Memory Selection: ⏳ IN PROGRESS - All 202 tests passing*
 
 ## PROJECT OVERVIEW
 
@@ -201,6 +201,44 @@
   - Foundation ready for person-centric flow (Phase 3B.3)
 - **Next Phase:** Phase 3B.3 - Two-pass LLM #1 memory selection (12-16h)
 
+#### Phase 3B.3: Two-Pass Memory Selection (IN PROGRESS - FIRST PASS COMPLETE) ⏳
+- **Timeline:** 2025-11-25 (ongoing)
+- **Status:** ⏳ IN PROGRESS - First pass + retrieval bridge complete, second pass ready
+- **Tests:** 202/202 passing (100%) ✅ - Gained 12 new tests (190→202)
+- **Implementation:**
+  - ✅ **RetrievedMemories struct:** Bridge type for memories between first/second pass
+  - ✅ **retrieve_selected_memories():** LLM #1 guided memory retrieval (replaces keyword matching)
+  - ✅ **second_pass():** Full domain recognition WITH memory context
+  - ✅ **Second-pass prompt:** Enhanced prompt with `<conversation_memory>` and `<temporal_context>` sections
+  - ✅ **FeatureDisabled LlmError variant:** Proper error handling when dual-LLM disabled
+- **Test Coverage (12 new tests):**
+  - ✅ test_retrieve_selected_memories_no_memory_needed
+  - ✅ test_retrieve_selected_memories_empty_search_terms
+  - ✅ test_retrieve_selected_memories_warm_with_data
+  - ✅ test_retrieve_selected_memories_no_match
+  - ✅ test_retrieve_selected_memories_temporal_context_passed_through
+  - ✅ test_second_pass_prompt_without_context
+  - ✅ test_second_pass_prompt_with_memories
+  - ✅ test_second_pass_prompt_with_temporal_context
+  - ✅ test_second_pass_prompt_with_both
+  - ✅ test_second_pass_disabled_returns_error
+  - ✅ test_two_pass_flow_integration
+  - ✅ test_second_pass_disabled_without_llm1_provider
+- **Two-Pass Architecture:**
+  - **first_pass():** Lightweight "what memories do I need?" (returns MemorySelectionGuidance)
+  - **retrieve_selected_memories():** Fetches warm/cold memory using guidance.search_terms
+  - **second_pass():** Full domain/boundary recognition WITH retrieved memories
+- **Remaining Tasks:**
+  - ⏳ Refactor process_input() to use two-pass flow
+  - ⏳ End-to-end testing with real LLM
+  - ⏳ Performance validation (<500ms P95)
+- **Files Modified:**
+  - `api/src/dual_llm/types.rs` - RetrievedMemories struct
+  - `api/src/dual_llm/mod.rs` - Export RetrievedMemories
+  - `api/src/dual_llm/processors.rs` - build_llm1_second_pass_prompt(), second_pass()
+  - `api/src/lib.rs` - retrieve_selected_memories(), second_pass() on VifApi
+  - `api/src/llm_error.rs` - FeatureDisabled variant
+
 #### Phase 3: Collective Associative Memory (CAM) - FOUNDATION COMPLETE ✅
 - **Timeline:** Weeks 4-17 (parallel to production)
 - **Design:** COMPLETE + UPDATED (all pgvector references replaced with Qdrant)
@@ -234,7 +272,7 @@
 - **Embeddings:** OpenAI ada-002 (real API, no mocks)
 - **LLM #1:** GPT-3.5-turbo (Unconscious processor, 6 responsibilities)
 - **LLM #2:** Claude 3.5 Sonnet (Conscious processor, context-aware, memory markers)
-- **Testing:** ✅ 190/190 passing (100%), 75%+ coverage, 0 clippy warnings
+- **Testing:** ✅ 202/202 passing (100%), 75%+ coverage, 0 clippy warnings
 
 ### Project Structure
 ```
