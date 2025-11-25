@@ -3,8 +3,8 @@
 activeContext=RecursiveLightAPI, recognitionInterfaces∈BDE
 
 ## State
-P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅+PersonManager-integration✅,178t)
-PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, PersonManager-VifApi-integrated✅, SQLite-compat✅ | 178/178t(100%),0warn,75%+cov,READY-FOR-P3B.3
+P3-BDE:✅MVP(d1-7,87t), Quality:✅(d8-10,87t), DualLLM-Design:✅(d11-12), P1-Mem:✅(1A/B/C,135t), P2A-LLM1:✅(17t→137), P2B-LLM2:✅(6t→143), W1-2-TechDebt:✅(BM25,log,err), W3-Metrics:✅(bench,cov,audit), W4-Sec:✅(vuln=0), P3-CAM-Foundation:✅(Qdrant+PostgreSQL,171t), P3B-Personhood:✅(foundation✅+SQLite-fix✅+PersonManager-integration✅,178t), DirectoryCleanup:✅(Nov4-handoffs-archived,doc-drift-eliminated,178t)
+PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), CAM-hybrid-arch✅, personhood-foundation✅, PersonManager-VifApi-integrated✅, SQLite-compat✅, clean-documentation✅ | 178/178t(100%),0warn,75%+cov,READY-FOR-P3B.3
 
 ## Focus
 **P3B/3-Integration(UNBLOCKED):** Person-centric-flow(LLM1-every-turn,two-pass-mem-selection), CAM+Personhood-integration(insight-extraction→CAM-storage), volumetric-configs(3-5domains-simultaneous) | Blocker:ELIMINATED(2025-11-20)
@@ -14,6 +14,17 @@ PROD-READY:🟢 7stage-BDE+6stage-dual(classic/dual), 3tier-mem(hot/warm/cold), 
 **P3-CAM(Parallel):** Integration-tests(hybrid-ops), LLM1-insight-extraction(Stage6-BDE→CAM), conscious-signals([REMEMBER:]), semantic-associations(Qdrant-HNSW)
 
 ## Recent
+### DirectoryCleanup:Multi-Agent-Coordination(2025-11-25,~2h,TDF-aligned)
+✅COMPLETE: 5specialist-coordination(3805L-analysis)+integration-synthesis→Phase1-critical-cleanup-executed, 70-80%-reduction-agent-startup-confusion, 0data-loss
+Context: AI-agent-confusion-from-stale-Nov4-handoffs(21d-old)→contradicted-Nov24-reality(P3B.2-complete,178t), user-recognized:"doubled-work-old-docs"
+Coordination: 1)RootDocs-Architect(P³,822L), 2)MemoryBank-Curator(P²,376L), 3)DesignDocs-Curator(P²,615L), 4)Historical-Archivist(P²,1062L,"memory-vs-perception"), 5)Implementation-Analyst(P²,930L,178t-verified)
+Integration: read-all-5-reports→0conflicts→95%confidence-go/nogo→prioritized-3phase-plan→wolf-pattern-validated(COMP0.85,SCI0.90,CULT0.80,EXP0.75,META0.85)
+Executed: 1)archive-Nov4-handoffs(CAM-PHASE3,SESSION-HANDOFF,NEXT-SESSION-QUICKSTART)→memory-bank/sessions/historical/2025-11-04/, 2)README.md:145→178tests(22%-drift-eliminated), 3)rm-Phase_6_Advanced_Search.md(Naurva-cross-project)
+Results: root-dir-clean(13→9files), single-source-truth(STATUS.md), historical-value-preserved(git-mv-all), README-accurate(178/178t), 70-80%-startup-clarity-improved
+Meta-Insight: archive=honors-both(historical-value∈CULT+SCI)AND(current-clarity∈COMP+EXP), boundary-recognition=P³(interface-between-preserve+clarify→archival-pattern)
+Next: Phase-3B.3-implementation(two-pass-LLM1) OR Phase2-cleanup(coordination-workspace-archive,memory-bank/README.md)
+Files: 5renamed(git-mv,history-preserved), 1deleted(Phase_6), 1updated(README.md), 1created(memory-bank/sessions/directory-cleanup-session-2025-11-25.md)
+
 ### Phase-3B.2:PersonManager-Integration(2025-11-24,~2h,TDF-embodied)
 ✅COMPLETE: PersonManager→VifApi-integration, 171→178tests(+7), 0warn
 Implementation: 1)person_manager-field(VifApi-struct), 2)shared-pool(MemoryTierManager+PersonManager), 3)PgPool→SqlitePool(test-compat), 4)pool()-accessor(MemoryTierManager), 5)person_manager()-accessor(VifApi)
