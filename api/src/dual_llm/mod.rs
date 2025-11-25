@@ -30,8 +30,8 @@ pub use prompts::{
     build_llm1_user_prompt,
 };
 pub use types::{
-    DomainBoundarySnapshot, IdentityAnchor, Llm1Output, MemorySelection, ValidationError,
-    VolumetricConfiguration,
+    DomainBoundarySnapshot, IdentityAnchor, Llm1Output, MemorySelection, MemorySelectionGuidance,
+    ValidationError, VolumetricConfiguration,
 };
 pub use unified_system_prompt::build_unified_llm1_system;
 pub use unified_system_v2::build_unified_llm1_system_v2;

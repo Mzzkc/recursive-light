@@ -2,7 +2,7 @@
 // LLM #1 processor with robust JSON parsing, validation, and fallback logic
 
 use crate::dual_llm::config::DualLlmConfig;
-use crate::dual_llm::types::{Llm1Output, ValidationError};
+use crate::dual_llm::types::{Llm1Output, MemorySelectionGuidance, ValidationError};
 use crate::flow_process::{
     DomainActivation, DomainEmergenceProcessor, FlowContext, FlowError, StageProcessor,
 };
@@ -277,6 +277,277 @@ Now analyze this input:"#,
     fn fallback_to_rust(&self, context: &mut FlowContext) -> Result<(), FlowError> {
         debug!("Falling back to Rust domain calculations (LLM #1 failed or disabled)");
         self.fallback_processor.process(context)
+    }
+
+    // ============================================================================
+    // PHASE 3B.3: TWO-PASS MEMORY SELECTION
+    // ============================================================================
+    // First pass: "What memories do I need?" (lightweight, before retrieval)
+    // Second pass: Full domain recognition with retrieved memories
+    // ============================================================================
+
+    /// Build LLM #1 first-pass prompt for memory selection guidance
+    /// This is a lightweight prompt focused on determining what memories to retrieve
+    fn build_llm1_first_pass_prompt(
+        &self,
+        user_input: &str,
+        temporal_context: Option<&str>,
+        person_context: Option<&str>,
+    ) -> String {
+        let temporal_section = temporal_context
+            .map(|tc| format!("\n<temporal_context>\n{}\n</temporal_context>", tc))
+            .unwrap_or_default();
+
+        let person_section = person_context
+            .map(|pc| format!("\n<person_context>\n{}\n</person_context>", pc))
+            .unwrap_or_default();
+
+        format!(
+            r#"<system_role>
+You are the Unconscious Processor (LLM #1) performing FIRST PASS evaluation.
+Your ONLY task: Determine what memories need to be retrieved before full processing.
+Be fast and decisive - this is pre-retrieval triage.
+</system_role>
+
+<task>
+Analyze the user input to determine:
+1. Does this message reference previous conversations? (warm memory needed)
+2. Does this message relate to cross-session patterns or identity? (cold memory needed)
+3. What search terms would find relevant memories?
+4. What is the temporal framing of this interaction?
+</task>
+{temporal_section}{person_section}
+<user_input>
+{user_input}
+</user_input>
+
+<output_format>
+Return ONLY valid JSON (no markdown, no explanation). Schema:
+{{
+  "warm_needed": true/false,
+  "cold_needed": true/false,
+  "search_terms": ["term1", "term2", "term3"],
+  "temporal_context": "Brief temporal framing (e.g., 'continuing recent discussion', 'new topic', 'resuming after 3 days')",
+  "reasoning": "1-2 sentence explanation of memory needs"
+}}
+</output_format>
+
+<decision_rules>
+- warm_needed = true if: references "earlier", "before", "we discussed", "last time", "continuing", session continuity
+- cold_needed = true if: references "always", "you mentioned once", "remember when", "in the past", identity/values, cross-session patterns
+- search_terms: Extract 2-5 key concepts/phrases for semantic search (nouns, verbs, specific topics)
+- temporal_context: Infer from message tone, references, time since last interaction
+</decision_rules>
+
+<examples>
+Example 1 (Continuation):
+User: "Can you help me with the code we were working on?"
+Output:
+{{
+  "warm_needed": true,
+  "cold_needed": false,
+  "search_terms": ["code", "working on", "help"],
+  "temporal_context": "Continuing recent technical discussion",
+  "reasoning": "Direct reference to previous work implies recent session context needed"
+}}
+
+Example 2 (New topic):
+User: "What's the capital of France?"
+Output:
+{{
+  "warm_needed": false,
+  "cold_needed": false,
+  "search_terms": ["capital", "France", "geography"],
+  "temporal_context": "New isolated question",
+  "reasoning": "Factual query with no reference to previous interactions"
+}}
+
+Example 3 (Identity reference):
+User: "You've always been good at explaining complex things"
+Output:
+{{
+  "warm_needed": false,
+  "cold_needed": true,
+  "search_terms": ["explaining", "complex", "teaching", "understanding"],
+  "temporal_context": "Referencing established relationship pattern",
+  "reasoning": "Cross-session identity reference - retrieve identity anchors and relationship patterns"
+}}
+</examples>
+
+Now analyze:"#,
+            temporal_section = temporal_section,
+            person_section = person_section,
+            user_input = user_input
+        )
+    }
+
+    /// Parse memory guidance JSON response from first pass
+    fn parse_memory_guidance(
+        &self,
+        response: &str,
+    ) -> Result<MemorySelectionGuidance, ValidationError> {
+        // Try to extract JSON from markdown code blocks if present
+        let json_str = if response.contains("```json") {
+            let start = response.find("```json").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected ```json marker but not found".to_string(),
+                )
+            })? + 7;
+            let end = response[start..].find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected closing ``` marker but not found".to_string(),
+                )
+            })? + start;
+            response[start..end].trim()
+        } else if response.contains("```") {
+            let start = response.find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation("Expected ``` marker but not found".to_string())
+            })? + 3;
+            let end = response[start..].find("```").ok_or_else(|| {
+                ValidationError::SchemaViolation(
+                    "Expected closing ``` marker but not found".to_string(),
+                )
+            })? + start;
+            response[start..end].trim()
+        } else {
+            response.trim()
+        };
+
+        // Parse JSON into MemorySelectionGuidance
+        let guidance: MemorySelectionGuidance = serde_json::from_str(json_str)?;
+
+        // Basic validation
+        if guidance.search_terms.is_empty() && (guidance.warm_needed || guidance.cold_needed) {
+            return Err(ValidationError::SchemaViolation(
+                "Memory retrieval requested but no search terms provided".to_string(),
+            ));
+        }
+
+        if guidance.temporal_context.trim().is_empty() {
+            return Err(ValidationError::MissingField(
+                "temporal_context".to_string(),
+            ));
+        }
+
+        if guidance.reasoning.trim().is_empty() {
+            return Err(ValidationError::MissingField("reasoning".to_string()));
+        }
+
+        Ok(guidance)
+    }
+
+    /// First pass: Determine what memories to retrieve before full processing
+    /// Returns MemorySelectionGuidance with warm/cold needs, search terms, temporal context
+    pub async fn first_pass(
+        &self,
+        user_input: &str,
+        temporal_context: Option<&str>,
+        person_context: Option<&str>,
+    ) -> Result<MemorySelectionGuidance, LlmError> {
+        // If dual-LLM disabled, return default "no memory needed"
+        if !self.config.enabled {
+            debug!("First pass skipped - dual-LLM mode disabled");
+            return Ok(MemorySelectionGuidance {
+                warm_needed: false,
+                cold_needed: false,
+                search_terms: vec![],
+                temporal_context: "Dual-LLM mode disabled".to_string(),
+                reasoning: "First pass skipped - using classic mode".to_string(),
+            });
+        }
+
+        // Build first-pass prompt
+        let prompt =
+            self.build_llm1_first_pass_prompt(user_input, temporal_context, person_context);
+
+        // Call LLM with retry logic
+        let max_retries = self.config.llm1_max_retries;
+        let timeout_ms = self.config.llm1_timeout_ms;
+        let mut attempts = 0;
+        let mut last_error: Option<LlmError> = None;
+
+        while attempts <= max_retries {
+            match tokio::time::timeout(
+                tokio::time::Duration::from_millis(timeout_ms),
+                self.llm_provider.send_request(&prompt),
+            )
+            .await
+            {
+                Ok(Ok(response_text)) => match self.parse_memory_guidance(&response_text) {
+                    Ok(guidance) => {
+                        debug!(
+                            warm_needed = guidance.warm_needed,
+                            cold_needed = guidance.cold_needed,
+                            search_terms = ?guidance.search_terms,
+                            "LLM #1 first pass completed"
+                        );
+                        return Ok(guidance);
+                    }
+                    Err(validation_err) => {
+                        warn!(
+                            attempt = attempts + 1,
+                            error = ?validation_err,
+                            "LLM #1 first pass validation failed, retrying"
+                        );
+                        last_error = Some(LlmError::InvalidResponseFormat {
+                            field: "first_pass_validation".to_string(),
+                            message: validation_err.to_string(),
+                            raw_response: Some(response_text),
+                        });
+                    }
+                },
+                Ok(Err(llm_err)) => {
+                    warn!(
+                        attempt = attempts + 1,
+                        error = ?llm_err,
+                        "LLM #1 first pass call failed, retrying"
+                    );
+                    last_error = Some(llm_err.clone());
+
+                    // Don't retry auth errors
+                    if matches!(llm_err, LlmError::AuthError { .. }) {
+                        return Err(llm_err);
+                    }
+                }
+                Err(_timeout) => {
+                    warn!(
+                        attempt = attempts + 1,
+                        timeout_ms = timeout_ms,
+                        "LLM #1 first pass request timed out, retrying"
+                    );
+                    last_error = Some(LlmError::NetworkError {
+                        message: format!("LLM #1 first pass timeout after {}ms", timeout_ms),
+                        status_code: None,
+                    });
+                }
+            }
+
+            attempts += 1;
+            if attempts <= max_retries {
+                let backoff_ms = 1000 * (2_u64.pow(attempts - 1));
+                tokio::time::sleep(tokio::time::Duration::from_millis(backoff_ms)).await;
+            }
+        }
+
+        // If fallback enabled, return default guidance instead of error
+        if self.config.fallback_enabled {
+            warn!("LLM #1 first pass failed, using fallback (no memory retrieval)");
+            return Ok(MemorySelectionGuidance {
+                warm_needed: false,
+                cold_needed: false,
+                search_terms: vec![],
+                temporal_context: "Fallback - LLM unavailable".to_string(),
+                reasoning: "First pass failed, proceeding without memory retrieval".to_string(),
+            });
+        }
+
+        Err(last_error.unwrap_or_else(|| LlmError::NetworkError {
+            message: format!(
+                "LLM #1 first pass failed after {} attempts",
+                max_retries + 1
+            ),
+            status_code: None,
+        }))
     }
 }
 
@@ -726,5 +997,306 @@ mod tests {
         // NOTE: We don't verify domain population here because that depends on
         // the domain registry being properly configured, which is tested separately.
         // The key test is that the feature flag correctly bypasses the LLM path.
+    }
+
+    // =========================================================================
+    // PHASE 3B.3: FIRST PASS TESTS
+    // =========================================================================
+
+    #[test]
+    fn test_first_pass_prompt_construction() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        // Test basic prompt without temporal/person context
+        let prompt = processor.build_llm1_first_pass_prompt("Hello world", None, None);
+        assert!(prompt.contains("Hello world"), "Should contain user input");
+        assert!(
+            prompt.contains("FIRST PASS evaluation"),
+            "Should identify as first pass"
+        );
+        assert!(prompt.contains("warm_needed"), "Should mention warm memory");
+        assert!(prompt.contains("cold_needed"), "Should mention cold memory");
+        assert!(
+            prompt.contains("search_terms"),
+            "Should mention search terms"
+        );
+        assert!(
+            !prompt.contains("<temporal_context>"),
+            "Should NOT have temporal section when None"
+        );
+        assert!(
+            !prompt.contains("<person_context>"),
+            "Should NOT have person section when None"
+        );
+    }
+
+    #[test]
+    fn test_first_pass_prompt_with_temporal_context() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let prompt = processor.build_llm1_first_pass_prompt(
+            "Continue our work",
+            Some("Last interaction: 3 days ago"),
+            None,
+        );
+        assert!(
+            prompt.contains("<temporal_context>"),
+            "Should have temporal section"
+        );
+        assert!(
+            prompt.contains("3 days ago"),
+            "Should contain temporal info"
+        );
+    }
+
+    #[test]
+    fn test_first_pass_prompt_with_person_context() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let prompt = processor.build_llm1_first_pass_prompt(
+            "Hello again",
+            None,
+            Some("User: Alice, Relationship: Familiar"),
+        );
+        assert!(
+            prompt.contains("<person_context>"),
+            "Should have person section"
+        );
+        assert!(prompt.contains("Alice"), "Should contain person info");
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_valid_json() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let valid_json = r#"{
+            "warm_needed": true,
+            "cold_needed": false,
+            "search_terms": ["code", "project", "implementation"],
+            "temporal_context": "Continuing recent technical discussion",
+            "reasoning": "User references previous work"
+        }"#;
+
+        let result = processor.parse_memory_guidance(valid_json);
+        assert!(result.is_ok(), "Should parse valid JSON");
+
+        let guidance = result.unwrap();
+        assert!(guidance.warm_needed, "warm_needed should be true");
+        assert!(!guidance.cold_needed, "cold_needed should be false");
+        assert_eq!(guidance.search_terms.len(), 3, "Should have 3 search terms");
+        assert_eq!(guidance.search_terms[0], "code");
+        assert!(guidance.temporal_context.contains("technical"));
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_with_markdown() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let markdown_response = r#"Here's the analysis:
+
+```json
+{
+    "warm_needed": false,
+    "cold_needed": true,
+    "search_terms": ["identity", "values"],
+    "temporal_context": "Cross-session reference",
+    "reasoning": "User referencing established patterns"
+}
+```
+"#;
+
+        let result = processor.parse_memory_guidance(markdown_response);
+        assert!(result.is_ok(), "Should parse JSON from markdown");
+
+        let guidance = result.unwrap();
+        assert!(!guidance.warm_needed);
+        assert!(guidance.cold_needed);
+        assert_eq!(guidance.search_terms.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_missing_search_terms_when_needed() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        // warm_needed is true but search_terms is empty - should fail validation
+        let invalid_json = r#"{
+            "warm_needed": true,
+            "cold_needed": false,
+            "search_terms": [],
+            "temporal_context": "Needs memory",
+            "reasoning": "Test"
+        }"#;
+
+        let result = processor.parse_memory_guidance(invalid_json);
+        assert!(
+            result.is_err(),
+            "Should reject empty search_terms when memory needed"
+        );
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_empty_search_terms_ok_when_not_needed() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        // Neither warm nor cold needed - empty search_terms is OK
+        let valid_json = r#"{
+            "warm_needed": false,
+            "cold_needed": false,
+            "search_terms": [],
+            "temporal_context": "New isolated question",
+            "reasoning": "No memory needed for factual query"
+        }"#;
+
+        let result = processor.parse_memory_guidance(valid_json);
+        assert!(
+            result.is_ok(),
+            "Should accept empty search_terms when no memory needed"
+        );
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_missing_temporal_context() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let invalid_json = r#"{
+            "warm_needed": false,
+            "cold_needed": false,
+            "search_terms": [],
+            "temporal_context": "",
+            "reasoning": "Test"
+        }"#;
+
+        let result = processor.parse_memory_guidance(invalid_json);
+        assert!(result.is_err(), "Should reject empty temporal_context");
+        assert!(matches!(
+            result.unwrap_err(),
+            ValidationError::MissingField(_)
+        ));
+    }
+
+    #[test]
+    fn test_parse_memory_guidance_missing_reasoning() {
+        let config = DualLlmConfig::enabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider, config);
+
+        let invalid_json = r#"{
+            "warm_needed": false,
+            "cold_needed": false,
+            "search_terms": [],
+            "temporal_context": "Test context",
+            "reasoning": "   "
+        }"#;
+
+        let result = processor.parse_memory_guidance(invalid_json);
+        assert!(result.is_err(), "Should reject whitespace-only reasoning");
+    }
+
+    #[tokio::test]
+    async fn test_first_pass_disabled_returns_default() {
+        let config = DualLlmConfig::disabled();
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::echo());
+        let processor = UnconscciousLlmProcessor::new(mock_provider.clone(), config);
+
+        let result = processor.first_pass("Test input", None, None).await;
+        assert!(result.is_ok(), "Should succeed even when disabled");
+
+        let guidance = result.unwrap();
+        assert!(
+            !guidance.warm_needed,
+            "Should not need warm memory when disabled"
+        );
+        assert!(
+            !guidance.cold_needed,
+            "Should not need cold memory when disabled"
+        );
+        assert!(
+            guidance.search_terms.is_empty(),
+            "Should have no search terms"
+        );
+        assert!(
+            guidance.temporal_context.contains("disabled"),
+            "Should indicate disabled"
+        );
+
+        // MockLlm should NOT be called
+        assert_eq!(
+            mock_provider.call_count(),
+            0,
+            "LLM should not be called when disabled"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_first_pass_with_mock_llm() {
+        // Create a mock that returns valid first-pass JSON
+        let mock_provider = Arc::new(crate::mock_llm::MockLlm::new(vec![r#"{
+                "warm_needed": true,
+                "cold_needed": false,
+                "search_terms": ["quantum", "entanglement"],
+                "temporal_context": "Continuing technical discussion",
+                "reasoning": "References previous technical work"
+            }"#
+        .to_string()]));
+
+        let config = DualLlmConfig::enabled();
+        let processor = UnconscciousLlmProcessor::new(mock_provider.clone(), config);
+
+        let result = processor
+            .first_pass("Tell me more about quantum entanglement", None, None)
+            .await;
+        assert!(result.is_ok(), "Should succeed with valid mock response");
+
+        let guidance = result.unwrap();
+        assert!(guidance.warm_needed);
+        assert!(!guidance.cold_needed);
+        assert_eq!(guidance.search_terms.len(), 2);
+        assert_eq!(guidance.search_terms[0], "quantum");
+
+        // MockLlm should be called once
+        assert_eq!(mock_provider.call_count(), 1, "LLM should be called once");
+    }
+
+    #[tokio::test]
+    async fn test_first_pass_fallback_on_error() {
+        let mut config = DualLlmConfig::enabled();
+        config.fallback_enabled = true;
+        config.llm1_max_retries = 0; // No retries for faster test
+
+        let mock_error_llm = Arc::new(crate::mock_llm::MockErrorLlm::network_error());
+        let processor = UnconscciousLlmProcessor::new(mock_error_llm, config);
+
+        let result = processor.first_pass("Test fallback", None, None).await;
+        assert!(result.is_ok(), "Should succeed via fallback");
+
+        let guidance = result.unwrap();
+        assert!(
+            !guidance.warm_needed,
+            "Fallback should not need warm memory"
+        );
+        assert!(
+            !guidance.cold_needed,
+            "Fallback should not need cold memory"
+        );
+        assert!(
+            guidance.temporal_context.contains("Fallback"),
+            "Should indicate fallback"
+        );
     }
 }

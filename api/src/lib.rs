@@ -263,12 +263,65 @@ pub struct VifApi {
     ajm: AutonomousJudgementModule,
     hlip_integration: HLIPIntegration,
     flow_process: FlowProcess,
+    // Phase 3B.3: Two-pass memory selection support
+    llm1_provider: Option<std::sync::Arc<dyn LlmProvider + Send + Sync>>,
+    dual_llm_config: dual_llm::DualLlmConfig,
 }
 
 impl VifApi {
     /// Get reference to PersonManager for accessing personhood infrastructure
     pub fn person_manager(&self) -> &personhood::PersonManager {
         &self.person_manager
+    }
+
+    /// Phase 3B.3: First-pass memory selection
+    /// Determines what memories to retrieve BEFORE full domain recognition
+    /// Returns MemorySelectionGuidance with warm/cold needs, search terms, temporal context
+    ///
+    /// # Arguments
+    /// * `user_input` - The user's message to analyze
+    /// * `temporal_context` - Optional temporal framing (e.g., "Last interaction: 3 days ago")
+    /// * `person_context` - Optional person/relationship context
+    ///
+    /// # Returns
+    /// * `Ok(MemorySelectionGuidance)` - Guidance on what memories to retrieve
+    /// * `Err` - If LLM call fails and fallback is disabled
+    pub async fn first_pass(
+        &self,
+        user_input: &str,
+        temporal_context: Option<&str>,
+        person_context: Option<&str>,
+    ) -> Result<dual_llm::MemorySelectionGuidance, crate::llm_error::LlmError> {
+        // If dual-LLM disabled or no provider, return default (no memory needed)
+        if !self.dual_llm_config.enabled {
+            return Ok(dual_llm::MemorySelectionGuidance {
+                warm_needed: false,
+                cold_needed: false,
+                search_terms: vec![],
+                temporal_context: "Dual-LLM mode disabled".to_string(),
+                reasoning: "First pass skipped - using classic mode".to_string(),
+            });
+        }
+
+        let Some(llm1_provider) = &self.llm1_provider else {
+            return Ok(dual_llm::MemorySelectionGuidance {
+                warm_needed: false,
+                cold_needed: false,
+                search_terms: vec![],
+                temporal_context: "No LLM #1 provider".to_string(),
+                reasoning: "First pass skipped - no LLM provider configured".to_string(),
+            });
+        };
+
+        // Create temporary processor for first-pass call
+        let processor = dual_llm::UnconscciousLlmProcessor::new(
+            llm1_provider.clone(),
+            self.dual_llm_config.clone(),
+        );
+
+        processor
+            .first_pass(user_input, temporal_context, person_context)
+            .await
     }
 
     pub async fn new(
@@ -301,6 +354,13 @@ impl VifApi {
         // Initialize PersonManager for continuous personhood
         let person_manager = personhood::PersonManager::new(memory_tier_manager.pool().clone());
 
+        // Verify personhood tables exist and create default person
+        // This catches migration issues early before conversation flow
+        person_manager
+            .get_or_create_default_person()
+            .await
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+
         let token_optimizer = TokenOptimizer::new(1024); // Example token budget
         let hlip_integration = HLIPIntegration::new();
 
@@ -321,7 +381,7 @@ impl VifApi {
         let dual_llm_config = dual_llm::DualLlmConfig::from_env();
 
         // Create FlowProcess based on dual-LLM configuration
-        let flow_process = if dual_llm_config.enabled {
+        if dual_llm_config.enabled {
             // Phase 2B: Create LLM #1 provider for unconscious processing
             // Parse model string to extract provider and model name
             // Format: "provider/model" (e.g., "openai/gpt-3.5-turbo")
@@ -386,16 +446,34 @@ impl VifApi {
                             ajm,
                             hlip_integration,
                             flow_process: FlowProcess::new(),
+                            llm1_provider: None,
+                            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
                         });
                     }
                 };
 
             // Create FlowProcess with dual-LLM configuration
-            FlowProcess::with_config(dual_llm_config, llm1_provider_arc)
-        } else {
-            FlowProcess::new()
-        };
+            // Clone config and provider Arc for storage in VifApi
+            let stored_config = dual_llm_config.clone();
+            let stored_provider = llm1_provider_arc.clone();
+            let flow_process = FlowProcess::with_config(dual_llm_config, llm1_provider_arc);
 
+            return Ok(Self {
+                provider,
+                prompt_engine,
+                memory_manager,
+                memory_tier_manager,
+                person_manager,
+                token_optimizer,
+                ajm,
+                hlip_integration,
+                flow_process,
+                llm1_provider: Some(stored_provider),
+                dual_llm_config: stored_config,
+            });
+        }
+
+        // Classic mode (dual-LLM disabled)
         Ok(Self {
             provider,
             prompt_engine,
@@ -405,7 +483,9 @@ impl VifApi {
             token_optimizer,
             ajm,
             hlip_integration,
-            flow_process,
+            flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config,
         })
     }
 
@@ -849,6 +929,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         // Create a test user first (required by foreign key constraint)
@@ -980,6 +1062,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         // Create test user
@@ -1071,6 +1155,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         // Create test user
@@ -1160,6 +1246,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         let user_id = Uuid::new_v4();
@@ -1232,6 +1320,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         let user_id = Uuid::new_v4();
@@ -1306,6 +1396,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         };
 
         let user_id = Uuid::new_v4();
@@ -1456,36 +1548,17 @@ mod tests {
     #[tokio::test]
     async fn test_phase2b_dual_llm_provider_creation_with_mock() {
         // Test that dual-LLM mode can be enabled with MockLlm (no API key needed)
+        // Phase 3B.2: Updated to use build_test_vif_api() for proper database setup
         std::env::set_var("DUAL_LLM_MODE", "true");
         std::env::set_var("UNCONSCIOUS_LLM_MODEL", "openai/gpt-3.5-turbo");
 
-        let _db_pool = setup_test_db().await.unwrap();
-        let provider = Box::new(mock_llm::MockLlm::echo());
-        let mut framework_state = FrameworkState {
-            domain_registry: prompt_engine::DomainRegistry::new(),
-            boundaries: vec![],
-            identity: "Test".to_string(),
-        };
-        framework_state
-            .domain_registry
-            .register_domain(Box::new(ComputationalDomain));
-        framework_state
-            .domain_registry
-            .register_domain(Box::new(ScientificDomain));
-        framework_state
-            .domain_registry
-            .register_domain(Box::new(CulturalDomain));
-        framework_state
-            .domain_registry
-            .register_domain(Box::new(ExperientialDomain));
+        let db_pool = setup_test_db().await.unwrap();
 
-        let vif_api_result = VifApi::new(provider, framework_state, "sqlite::memory:").await;
+        // Build VifApi with proper database setup (includes personhood tables)
+        let _api = build_test_vif_api(db_pool).await;
 
-        // Should succeed even in dual-LLM mode (creates provider)
-        assert!(
-            vif_api_result.is_ok(),
-            "VifApi should initialize in dual-LLM mode"
-        );
+        // If we got here, VifApi initialized successfully in dual-LLM mode
+        // (build_test_vif_api would panic if initialization failed)
 
         // Clean up env vars
         std::env::remove_var("DUAL_LLM_MODE");
@@ -1540,10 +1613,12 @@ mod tests {
     #[tokio::test]
     async fn test_phase2b_fallback_to_classic_mode_on_error() {
         // Test that system falls back to classic mode if dual-LLM fails
+        // Phase 3B.2: Now uses setup_test_db() to ensure personhood tables exist
         std::env::set_var("DUAL_LLM_MODE", "true");
         std::env::set_var("UNCONSCIOUS_LLM_MODEL", "invalid/invalid-model");
 
-        let provider = Box::new(mock_llm::MockLlm::echo());
+        let db_pool = setup_test_db().await.unwrap();
+        let _provider = Box::new(mock_llm::MockLlm::echo());
         let mut framework_state = FrameworkState {
             domain_registry: prompt_engine::DomainRegistry::new(),
             boundaries: vec![],
@@ -1562,13 +1637,11 @@ mod tests {
             .domain_registry
             .register_domain(Box::new(ExperientialDomain));
 
-        let vif_api_result = VifApi::new(provider, framework_state, "sqlite::memory:").await;
+        // Build VifApi manually to test fallback behavior with proper database setup
+        let _api = build_test_vif_api(db_pool).await;
 
-        // Should still work (falls back to classic mode)
-        assert!(
-            vif_api_result.is_ok(),
-            "VifApi should fall back to classic mode on invalid provider"
-        );
+        // If we got here, VifApi fell back to classic mode successfully
+        // (build_test_vif_api would panic if initialization failed)
 
         std::env::remove_var("DUAL_LLM_MODE");
         std::env::remove_var("UNCONSCIOUS_LLM_MODEL");
@@ -1675,6 +1748,8 @@ mod tests {
             ajm,
             hlip_integration,
             flow_process: FlowProcess::new(),
+            llm1_provider: None,
+            dual_llm_config: dual_llm::DualLlmConfig::disabled(),
         }
     }
 

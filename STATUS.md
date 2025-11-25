@@ -234,7 +234,7 @@
 - **Embeddings:** OpenAI ada-002 (real API, no mocks)
 - **LLM #1:** GPT-3.5-turbo (Unconscious processor, 6 responsibilities)
 - **LLM #2:** Claude 3.5 Sonnet (Conscious processor, context-aware, memory markers)
-- **Testing:** ✅ 178/178 passing (100%), 75%+ coverage, 0 clippy warnings
+- **Testing:** ✅ 190/190 passing (100%), 75%+ coverage, 0 clippy warnings
 
 ### Project Structure
 ```
@@ -316,18 +316,22 @@ recursive-light/
 - LLM #1 prepares context EVERY turn (intelligent memory selection)
 
 ### In Progress
-*None - Ready for Phase 3B/3 integration work*
+**Phase 3B.3: Two-Pass Memory Selection** - First pass component COMPLETE (2025-11-25)
+- ✅ `first_pass()` method in UnconscciousLlmProcessor (processors.rs:282-538)
+- ✅ `first_pass()` method in VifApi (lib.rs:277-323)
+- ✅ `MemorySelectionGuidance` exported from dual_llm module
+- ✅ 12 new unit tests (190 total passing)
+- ⏳ Second-pass integration remaining (9 tasks)
 
 ### Blocked
 *None - All blockers eliminated*
 
 ### Needs Attention (Next Steps)
-✅ **Phase 3B/3 Integration** - Foundation complete, comprehensive plan created (2025-11-21)
-- **Implementation Plan**: `/home/emzi/Projects/recursive-light/PHASE-3B-3-INTEGRATION-PLAN.md`
-- **Scope**: 40-50 hours, ~2500-3500 LOC, 60-75 tests, 14 files
-- **Critical Path**: Phase 3B.2 → 3B.3 → 3B.4+3B.5 (parallel) → CAM integration
-- **Start With**: Phase 3B.2 (PersonManager integration, 6-8 hours)
-- See plan document for detailed implementation steps, testing strategy, and success criteria
+**Phase 3B.3 Continuation** - Second-pass integration (2025-11-25)
+- **Next Task**: Modify `process()` to accept optional memories OR add `retrieve_selected_memories()`
+- **Remaining**: 9 tasks (process() modification, retrieve_selected_memories, process_input refactor, tests)
+- **Session File**: `memory-bank/sessions/phase3b-3-first-pass-session-2025-11-25.md`
+- **Tests**: 190 passing (up from 178), 0 clippy warnings
 
 ---
 

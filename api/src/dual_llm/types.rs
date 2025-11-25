@@ -79,7 +79,28 @@ pub struct PatternRecognition {
     pub significance: String,
 }
 
-/// Memory selection guidance from LLM #1 (Emerging feature)
+/// Memory selection guidance from LLM #1 first pass (Phase 3B.3)
+/// Lightweight "what memories do I need?" structure for initial evaluation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemorySelectionGuidance {
+    /// Should warm memory (current session) be retrieved?
+    pub warm_needed: bool,
+
+    /// Should cold memory (previous sessions) be retrieved?
+    pub cold_needed: bool,
+
+    /// Search terms to use for retrieval (extracted from user message + temporal context)
+    pub search_terms: Vec<String>,
+
+    /// Temporal context framing (e.g., "continuing from 3 days ago")
+    pub temporal_context: String,
+
+    /// Reasoning for why these memories are needed
+    pub reasoning: String,
+}
+
+/// Memory selection guidance from LLM #1 second pass (Advanced - not yet used)
+/// Detailed "how to retrieve it" structure with significance tuning
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemorySelection {
     /// Query for warm memory (current session context)
